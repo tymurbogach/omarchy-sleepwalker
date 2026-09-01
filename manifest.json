@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "id": "io.github.tymurbogach.lid",
-  "name": "Lid",
+  "id": "io.github.tymurbogach.sleepwalker",
+  "name": "Sleepwalker",
   "version": "0.1.0",
   "author": "tymurbogach",
   "license": "MIT",
@@ -12,7 +12,7 @@
     "barWidget": "Panel.qml"
   },
   "barWidget": {
-    "displayName": "Lid",
+    "displayName": "Sleepwalker",
     "description": "Lid closed keeps working, screen off. Tap to toggle inhibit + optional lock.",
     "category": "System",
     "defaultSection": "center"

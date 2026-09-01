@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
-# Installs the Lid plugin: bar widget + inhibitor + lid-close shim.
+# Installs the Sleepwalker plugin: bar widget + inhibitor + lid-close shim.
 #   ./install.sh
 #   ./install.sh --sync   # only (re)stage plugin + bin, no enable/restart
 set -euo pipefail
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-ID="io.github.tymurbogach.lid"
-CLI="omarchy-lid"
+ID="io.github.tymurbogach.sleepwalker"
+CLI="omarchy-sleepwalker"
+OLD_ID="io.github.tymurbogach.lid"
+OLD_CLI="omarchy-lid"
+OLD_SERVICE="omarchy-lid-inhibit.service"
 SYNC_ONLY=0
 [[ ${1:-} != "--sync" ]] || SYNC_ONLY=1
 
@@ -15,7 +18,7 @@ command -v omarchy >/dev/null || { echo "this needs Omarchy" >&2; exit 1; }
 PLUGINS_DIR="$HOME/.config/omarchy/plugins"
 BIN_DIR="$HOME/.local/bin"
 SYSTEMD_USER_DIR="$HOME/.config/systemd/user"
-SERVICE="omarchy-lid-inhibit.service"
+SERVICE="omarchy-sleepwalker-inhibit.service"
 
 stage_plugin() {
   local id="$1"
@@ -39,9 +42,23 @@ echo "· plugin $ID"
 mkdir -p "$PLUGINS_DIR"
 stage_plugin "$ID"
 
+# Migrate from old Lid if present
+echo "· migrating from $OLD_ID if present"
+omarchy plugin remove "$OLD_ID" --yes >/dev/null 2>&1 || true
+rm -rf "$PLUGINS_DIR/$OLD_ID" "$PLUGINS_DIR/.$OLD_ID.staging" "$PLUGINS_DIR/.$OLD_ID.retired" 2>/dev/null || true
+for d in "$PLUGINS_DIR"/.*.bak.*; do [[ -d $d ]] || continue; id=$(jq -r '.id // empty' "$d/manifest.json" 2>/dev/null || echo ""); [[ $id == "$OLD_ID" ]] && rm -rf "$d"; done
+systemctl --user disable --now "$OLD_SERVICE" >/dev/null 2>&1 || systemctl --user stop "$OLD_SERVICE" >/dev/null 2>&1 || true
+rm -f "$SYSTEMD_USER_DIR/$OLD_SERVICE" 2>/dev/null || true
+rm -f "$BIN_DIR/$OLD_CLI" "$BIN_DIR/${OLD_CLI}-uninstall" 2>/dev/null || true
+if [[ -f $HOME/.local/state/omarchy/toggles/lid-ignore && ! -f $HOME/.local/state/omarchy/toggles/sleepwalker ]]; then
+  cp -f "$HOME/.local/state/omarchy/toggles/lid-ignore" "$HOME/.local/state/omarchy/toggles/sleepwalker" 2>/dev/null || true
+fi
+
 echo "· $CLI in $BIN_DIR"
 mkdir -p "$BIN_DIR"
 install -m 755 "$HERE/bin/$CLI" "$BIN_DIR/$CLI"
+# keep legacy symlink for Laptop indicator until it migrates to new CLI
+ln -sf "$BIN_DIR/$CLI" "$BIN_DIR/$OLD_CLI" 2>/dev/null || true
 install -m 755 "$HERE/bin/omarchy-system-lid-close" "$BIN_DIR/omarchy-system-lid-close"
 install -m 755 "$HERE/uninstall.sh" "$BIN_DIR/${CLI}-uninstall"
 
@@ -51,7 +68,7 @@ cp -f "$HERE/systemd/user/$SERVICE" "$SYSTEMD_USER_DIR/$SERVICE"
 systemctl --user daemon-reload 2>/dev/null || true
 
 # Reconcile inhibitor with existing toggle (so reinstall after reboot keeps state)
-if [[ -f $HOME/.local/state/omarchy/toggles/lid-ignore ]]; then
+if [[ -f $HOME/.local/state/omarchy/toggles/sleepwalker || -f $HOME/.local/state/omarchy/toggles/lid-ignore ]]; then
   systemctl --user enable --now "$SERVICE" >/dev/null 2>&1 || systemctl --user start "$SERVICE" >/dev/null 2>&1 || true
 fi
 

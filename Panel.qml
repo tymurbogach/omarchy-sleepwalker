@@ -5,21 +5,21 @@ import Quickshell.Io
 import qs.Commons
 import qs.Ui
 
-// Lid — bar widget left of the clock.
+// Sleepwalker — bar widget left of the clock.
 //
 // One icon on the bar, one panel on tap.
-// Owns no state: every question goes to `omarchy-lid status --json`.
+// Owns no state: every question goes to `omarchy-sleepwalker status --json`.
 //
-// lid on  = systemd-inhibit handle-lid-switch (no suspend) + Hyprland
-//          clamshell disables eDP-1, optional lock (off by default).
-// lid off = stock: lid close → suspend-then-hibernate (+ lock if no dock).
+// on  = systemd-inhibit handle-lid-switch (no suspend) + Hyprland
+//       clamshell disables eDP-1, optional lock (off by default).
+// off = stock: lid close → suspend-then-hibernate (+ lock if no dock).
 Panel {
   id: root
 
-  moduleName: "io.github.tymurbogach.lid"
+  moduleName: "io.github.tymurbogach.sleepwalker"
   manageIpc: false
 
-  readonly property string cli: "omarchy-lid"
+  readonly property string cli: "omarchy-sleepwalker"
 
   readonly property color foreground: bar ? bar.foreground : Color.foreground
   readonly property color accent: Color.accent
@@ -146,7 +146,7 @@ Panel {
     bar: root.bar
     // FA laptop mono-glifo  — ya con chasis, misma altura/centrado que resto
     text: ""
-    tooltipText: "Lid — " + root.summary
+    tooltipText: "Sleepwalker — " + root.summary
     foreground: root.lidOn
       ? (root.bar ? root.bar.barForeground : Color.foreground)
       : Qt.darker(root.bar ? root.bar.barForeground : Color.foreground, 1.55)
@@ -187,7 +187,7 @@ Panel {
 
         PanelHero {
           width: parent.width
-          title: "Lid"
+          title: "Sleepwalker"
           meta: root.summary
           foreground: root.foreground
           fontFamily: root.fontFamily

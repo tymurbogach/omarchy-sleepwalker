@@ -1,30 +1,32 @@
 #!/bin/bash
-# omarchy-lid — toggle "lid closed keeps working"
-#   omarchy-lid status [--json]
-#   omarchy-lid lid on|off|toggle
-#   omarchy-lid lock on|off|toggle
-#   omarchy-lid doctor
+# omarchy-sleepwalker — keep working with lid closed
+#   omarchy-sleepwalker status [--json]
+#   omarchy-sleepwalker lid on|off|toggle
+#   omarchy-sleepwalker lock on|off|toggle
+#   omarchy-sleepwalker doctor
 #
 # State:
-#   ~/.local/state/omarchy/toggles/lid-ignore  — presence = Lid Ignore on
-#   ~/.local/state/omarchy/toggles/lid-lock    — presence = Lock on lid close (opt-in)
-#   systemd --user omarchy-lid-inhibit.service  — holds handle-lid-switch inhibitor
+#   ~/.local/state/omarchy/toggles/lid-ignore  — presence = Lid Ignore on (legacy, also checked)
+#   ~/.local/state/omarchy/toggles/sleepwalker — presence = Sleepwalker on (preferred)
+#   systemd --user omarchy-sleepwalker-inhibit.service  — holds handle-lid-switch inhibitor
 
 set -euo pipefail
 
 SELF=$(basename "$0")
-SERVICE="omarchy-lid-inhibit.service"
-TOGGLE_IGNORE="$HOME/.local/state/omarchy/toggles/lid-ignore"
+SERVICE="omarchy-sleepwalker-inhibit.service"
+# legacy lid-ignore kept for migration; new preferred is sleepwalker
+TOGGLE_IGNORE="$HOME/.local/state/omarchy/toggles/sleepwalker"
+TOGGLE_IGNORE_LEGACY="$HOME/.local/state/omarchy/toggles/lid-ignore"
 TOGGLE_LOCK="$HOME/.local/state/omarchy/toggles/lid-lock"
 UNIT_SRC_CANDIDATES=(
   "$HOME/.config/systemd/user/$SERVICE"
   "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/systemd/user/$SERVICE"
-  "/usr/share/omarchy-lid/$SERVICE"
+  "/usr/share/omarchy-sleepwalker/$SERVICE"
 )
 
 fail() { echo "$SELF: $*" >&2; exit 1; }
 
-is_ignore_on() { [[ -f $TOGGLE_IGNORE ]]; }
+is_ignore_on() { [[ -f $TOGGLE_IGNORE || -f $TOGGLE_IGNORE_LEGACY ]]; }
 is_lock_on()   { [[ -f $TOGGLE_LOCK ]]; }
 
 is_inhibit_active() {
@@ -63,10 +65,11 @@ set_lid() {
     on)
       mkdir -p "$(dirname "$TOGGLE_IGNORE")"
       touch "$TOGGLE_IGNORE"
+      rm -f "$TOGGLE_IGNORE_LEGACY"
       enable_inhibit
       ;;
     off)
-      rm -f "$TOGGLE_IGNORE"
+      rm -f "$TOGGLE_IGNORE" "$TOGGLE_IGNORE_LEGACY"
       disable_inhibit
       ;;
     toggle|"")
