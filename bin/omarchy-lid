@@ -47,12 +47,14 @@ ensure_unit_installed() {
 
 enable_inhibit() {
   ensure_unit_installed || fail "unit $SERVICE not found — run install.sh"
-  systemctl --user daemon-reload 2>/dev/null || true
-  systemctl --user enable --now "$SERVICE" >/dev/null 2>&1 || systemctl --user start "$SERVICE" >/dev/null 2>&1 || true
+  if ! systemctl --user is-enabled --quiet "$SERVICE" 2>/dev/null; then
+    systemctl --user enable "$SERVICE" >/dev/null 2>&1 || true
+  fi
+  systemctl --user start "$SERVICE" >/dev/null 2>&1 || true
 }
 
 disable_inhibit() {
-  systemctl --user disable --now "$SERVICE" >/dev/null 2>&1 || systemctl --user stop "$SERVICE" >/dev/null 2>&1 || true
+  systemctl --user stop "$SERVICE" >/dev/null 2>&1 || true
 }
 
 set_lid() {

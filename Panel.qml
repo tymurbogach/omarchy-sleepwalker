@@ -144,8 +144,8 @@ Panel {
     id: button
     anchors.fill: parent
     bar: root.bar
-    // portátil abierto — 󰍹 + base fina
-    text: "󰍹"
+    // FA laptop mono-glifo  — ya con chasis, misma altura/centrado que resto
+    text: ""
     tooltipText: "Lid — " + root.summary
     foreground: root.lidOn
       ? (root.bar ? root.bar.barForeground : Color.foreground)
@@ -194,7 +194,7 @@ Panel {
           iconOpacity: root.lidOn ? 1.0 : 0.5
           iconComponent: Component {
             Text {
-              text: root.lidOn ? "󰍹" : "󰋊"
+              text: ""
               color: root.foreground
               font.family: root.fontFamily
               font.pixelSize: Style.font.display
