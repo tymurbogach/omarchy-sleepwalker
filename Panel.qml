@@ -144,8 +144,8 @@ Panel {
     id: button
     anchors.fill: parent
     bar: root.bar
-    // 󰋊 lid closed, 󰍹 lid open — use laptop variant
-    text: root.lidOn ? "󰍹" : "󰋊"
+    // portátil abierto — 󰍹 + base fina
+    text: "󰍹"
     tooltipText: "Lid — " + root.summary
     foreground: root.lidOn
       ? (root.bar ? root.bar.barForeground : Color.foreground)
@@ -287,27 +287,18 @@ Panel {
         }
 
         Text {
-          width: parent.width
-          text: inhibitStatus.text
-          color: root.dim
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.caption
-          wrapMode: Text.WordWrap
-        }
-
-        Text {
           id: inhibitStatus
           width: parent.width
-          property string text: {
+          property string statusText: {
             if (!root.asked) return ""
             if (root.lidOn && !root.inhibitOn) return "⚠ toggle on pero inhibitor inactivo — pulsa Repair"
             if (!root.lidOn && root.inhibitOn) return "⚠ inhibitor activo pero toggle off — pulsa Repair"
             if (root.lidOn) return "inhibitor activo (handle-lid-switch)"
             return ""
           }
-          text: text
-          visible: text !== ""
-          color: root.lidOn && !root.inhibitOn ? Color.negative : root.dim
+          text: statusText
+          visible: statusText !== ""
+          color: root.lidOn && !root.inhibitOn ? Color.urgent : root.dim
           font.family: root.fontFamily
           font.pixelSize: Style.font.caption
           wrapMode: Text.WordWrap
