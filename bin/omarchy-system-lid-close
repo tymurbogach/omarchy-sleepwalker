@@ -1,0 +1,34 @@
+#!/bin/bash
+# omarchy-system-lid-close — shim installed by omarchy-lid
+#
+# Hyprland calls `omarchy-system-lid-close` on `switch:on:Lid Switch`
+# (default/hypr/bindings/utilities.lua:34). Stock it locks (+ clamshell).
+# When lid-ignore is on and lock-on-lid is off, we skip the lock but still
+# reconcile displays via omarchy-hyprland-monitor-clamshell.
+#
+# Installed to ~/.local/bin which sorts before /usr/share/omarchy/bin on
+# Omarchy's PATH, so this shadows the stock script without touching /usr.
+# Uninstall removes it.
+
+set -euo pipefail
+
+REAL="/usr/share/omarchy/bin/omarchy-system-lid-close"
+CLAMSHELL="/usr/share/omarchy/bin/omarchy-hyprland-monitor-clamshell"
+IGNORE_FLAG="$HOME/.local/state/omarchy/toggles/lid-ignore"
+LOCK_FLAG="$HOME/.local/state/omarchy/toggles/lid-lock"
+
+# If not ignoring, delegate 1:1 to stock (lock + clamshell).
+if [[ ! -f $IGNORE_FLAG ]]; then
+  exec "$REAL" "$@"
+fi
+
+# Ignoring: honour optional lock-on-lid toggle.
+if [[ -f $LOCK_FLAG ]]; then
+  exec "$REAL" "$@"
+fi
+
+# Ignore + no lock → only reconcile displays, no lock.
+if [[ -x $CLAMSHELL ]]; then
+  "$CLAMSHELL" >/dev/null 2>&1 || true
+fi
+exit 0

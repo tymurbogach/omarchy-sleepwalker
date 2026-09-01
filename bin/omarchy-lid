@@ -1,0 +1,158 @@
+#!/bin/bash
+# omarchy-lid — toggle "lid closed keeps working"
+#   omarchy-lid status [--json]
+#   omarchy-lid lid on|off|toggle
+#   omarchy-lid lock on|off|toggle
+#   omarchy-lid doctor
+#
+# State:
+#   ~/.local/state/omarchy/toggles/lid-ignore  — presence = Lid Ignore on
+#   ~/.local/state/omarchy/toggles/lid-lock    — presence = Lock on lid close (opt-in)
+#   systemd --user omarchy-lid-inhibit.service  — holds handle-lid-switch inhibitor
+
+set -euo pipefail
+
+SELF=$(basename "$0")
+SERVICE="omarchy-lid-inhibit.service"
+TOGGLE_IGNORE="$HOME/.local/state/omarchy/toggles/lid-ignore"
+TOGGLE_LOCK="$HOME/.local/state/omarchy/toggles/lid-lock"
+UNIT_SRC_CANDIDATES=(
+  "$HOME/.config/systemd/user/$SERVICE"
+  "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/systemd/user/$SERVICE"
+  "/usr/share/omarchy-lid/$SERVICE"
+)
+
+fail() { echo "$SELF: $*" >&2; exit 1; }
+
+is_ignore_on() { [[ -f $TOGGLE_IGNORE ]]; }
+is_lock_on()   { [[ -f $TOGGLE_LOCK ]]; }
+
+is_inhibit_active() {
+  systemctl --user is-active --quiet "$SERVICE" 2>/dev/null
+}
+
+ensure_unit_installed() {
+  # Installed by install.sh to ~/.config/systemd/user; copy if missing (e.g. git add without install)
+  if [[ -f $HOME/.config/systemd/user/$SERVICE ]]; then return 0; fi
+  for c in "${UNIT_SRC_CANDIDATES[@]}"; do
+    if [[ -f $c ]]; then
+      mkdir -p "$HOME/.config/systemd/user"
+      cp -f "$c" "$HOME/.config/systemd/user/$SERVICE"
+      systemctl --user daemon-reload 2>/dev/null || true
+      return 0
+    fi
+  done
+  return 1
+}
+
+enable_inhibit() {
+  ensure_unit_installed || fail "unit $SERVICE not found — run install.sh"
+  systemctl --user daemon-reload 2>/dev/null || true
+  systemctl --user enable --now "$SERVICE" >/dev/null 2>&1 || systemctl --user start "$SERVICE" >/dev/null 2>&1 || true
+}
+
+disable_inhibit() {
+  systemctl --user disable --now "$SERVICE" >/dev/null 2>&1 || systemctl --user stop "$SERVICE" >/dev/null 2>&1 || true
+}
+
+set_lid() {
+  local action="$1"
+  case "$action" in
+    on)
+      mkdir -p "$(dirname "$TOGGLE_IGNORE")"
+      touch "$TOGGLE_IGNORE"
+      enable_inhibit
+      ;;
+    off)
+      rm -f "$TOGGLE_IGNORE"
+      disable_inhibit
+      ;;
+    toggle|"")
+      if is_ignore_on; then set_lid off; else set_lid on; fi
+      ;;
+    *) fail "lid: expected on|off|toggle, got '$action'" ;;
+  esac
+}
+
+set_lock() {
+  local action="$1"
+  case "$action" in
+    on)
+      mkdir -p "$(dirname "$TOGGLE_LOCK")"
+      touch "$TOGGLE_LOCK"
+      ;;
+    off)
+      rm -f "$TOGGLE_LOCK"
+      ;;
+    toggle|"")
+      if is_lock_on; then set_lock off; else set_lock on; fi
+      ;;
+    *) fail "lock: expected on|off|toggle, got '$action'" ;;
+  esac
+}
+
+cmd_status() {
+  local json=false
+  [[ ${1:-} == "--json" ]] && json=true
+
+  local active inhibit lock
+  is_ignore_on && active=true || active=false
+  is_inhibit_active && inhibit=true || inhibit=false
+  is_lock_on && lock=true || lock=false
+
+  if $json; then
+    printf '{"active":%s,"inhibitActive":%s,"lockOnLid":%s}\n' "$active" "$inhibit" "$lock"
+  else
+    printf 'lid-ignore: %s\n' "$([ "$active" = true ] && echo on || echo off)"
+    printf 'inhibit:    %s\n' "$([ "$inhibit" = true ] && echo active || echo inactive)"
+    printf 'lock-on-lid:%s\n' "$([ "$lock" = true ] && echo on || echo off)"
+    if [[ $active == true && $inhibit == false ]]; then
+      echo "warning: toggle on but inhibitor inactive — run: $SELF doctor" >&2
+    fi
+    if [[ $active == false && $inhibit == true ]]; then
+      echo "warning: inhibitor active but toggle off — run: $SELF doctor" >&2
+    fi
+  fi
+}
+
+cmd_doctor() {
+  local active inhibit
+  is_ignore_on && active=true || active=false
+  is_inhibit_active && inhibit=true || inhibit=false
+  echo "· lid-ignore: $active, inhibit: $inhibit, lock-on-lid: $(is_lock_on && echo on || echo off)"
+  if [[ $active == true && $inhibit == false ]]; then
+    echo "· fixing: enabling $SERVICE"
+    enable_inhibit
+  elif [[ $active == false && $inhibit == true ]]; then
+    echo "· fixing: disabling $SERVICE"
+    disable_inhibit
+  else
+    echo "· in sync"
+  fi
+  # Ensure wrapper/shim is present if toggles say we need it
+  # (install.sh is the canonical path, doctor just nudges)
+  cmd_status --json >/dev/null
+  echo "· ok"
+}
+
+usage() {
+  cat <<USAGE
+Usage: $SELF <command> [args]
+
+  status [--json]          show lid state
+  lid on|off|toggle        inhibit lid suspend (keep working closed)
+  lock on|off|toggle       lock on lid close when lid-ignore is on (default off)
+  doctor                   reconcile toggle vs systemd unit
+USAGE
+}
+
+# --- dispatch ---
+
+case "${1:-status}" in
+  status) shift || true; cmd_status "${1:-}" ;;
+  lid)    shift || true; set_lid "${1:-toggle}"; cmd_status --json >/dev/null; echo "lid $(is_ignore_on && echo on || echo off)" ;;
+  lock)   shift || true; set_lock "${1:-toggle}"; echo "lock-on-lid $(is_lock_on && echo on || echo off)" ;;
+  doctor) cmd_doctor ;;
+  -h|--help|help) usage ;;
+  *) echo "unknown command: $1" >&2; usage; exit 1 ;;
+esac
