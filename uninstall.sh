@@ -38,6 +38,26 @@ echo "· clearing toggles (off = gone)"
 rm -f "$HOME/.local/state/omarchy/toggles/sleepwalker" "$HOME/.local/state/omarchy/toggles/lid-ignore"
 rm -f "$HOME/.local/state/omarchy/toggles/lid-lock"
 
+# Ensure no laptop icon remains: hide Laptop indicator from cyberdyne.indicators
+# (shares the same  glyph and would look like the plugin is still there)
+if command -v jq >/dev/null 2>&1 && [[ -f "$HOME/.config/omarchy/shell.json" ]]; then
+  tmp=$(mktemp)
+  jq '
+    if .bar.layout.center then
+      .bar.layout.center |= map(
+        if .id == "cyberdyne.indicators" then
+          .items = (["Dictation","ScreenRecording","Reminder","NightLight","Dnd","StayAwake"])
+          | .alwaysShow = true
+        else . end
+      )
+    else . end
+  ' "$HOME/.config/omarchy/shell.json" > "$tmp" 2>/dev/null && mv "$tmp" "$HOME/.config/omarchy/shell.json" || rm -f "$tmp"
+fi
+
+# Kill any lingering inhibitor and verify
+systemd-inhibit --list 2>/dev/null | grep -qi "sleepwalker" && systemctl --user stop "$SERVICE" >/dev/null 2>&1 || true
+rm -f "$SYSTEMD_USER_DIR/$SERVICE" 2>/dev/null || true
+
 omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
 omarchy-restart-shell >/dev/null 2>&1 || true
 
