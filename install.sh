@@ -80,13 +80,23 @@ fi
 omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
 sleep 0.5
 
-# Enable the widget exactly left of the clock (between indicators and clock,
-# the strip you screenshot'd — 6 icons + Lid = 7). --before may fail if
-# omarchy.clock is not yet in the layout (fresh shell.json), fallback to plain enable.
-if ! omarchy plugin enable "$ID" --before omarchy.clock 2>/dev/null; then
-  omarchy plugin enable "$ID" 2>/dev/null || true
-  # Best-effort move to center-before-clock even if already enabled elsewhere
-  omarchy bar put "$ID" --before omarchy.clock 2>/dev/null || true
+# Integrated icon: disable the large separate bar-widget and use the
+# small indicator inside cyberdyne.indicators (same strip as Reminder/StayAwake)
+# — matches Omarchy's original indicator styling (statusSlot, dim 0.45).
+omarchy plugin disable "$ID" >/dev/null 2>&1 || true
+if command -v jq >/dev/null 2>&1 && [[ -f "$HOME/.config/omarchy/shell.json" ]]; then
+  tmp=$(mktemp)
+  jq '
+    .bar.layout.center |= map(select(.id != "'"$ID"'"))
+    | if .bar.layout.center then
+        .bar.layout.center |= map(
+          if .id == "cyberdyne.indicators" then
+            .items = (["Dictation","ScreenRecording","Reminder","NightLight","Dnd","StayAwake","Laptop"])
+            | .alwaysShow = true
+          else . end
+        )
+      else . end
+  ' "$HOME/.config/omarchy/shell.json" > "$tmp" 2>/dev/null && mv "$tmp" "$HOME/.config/omarchy/shell.json" || rm -f "$tmp"
 fi
 omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
 sleep 0.3
@@ -94,7 +104,7 @@ sleep 0.3
 echo
 "$BIN_DIR/$CLI" doctor || true
 
-# One restart at the end: bar widget sizing + single instance guarantee
+# One restart at the end: indicator sizing + single instance guarantee
 omarchy-restart-shell >/dev/null 2>&1 || true
 
 cat <<EOF
@@ -107,9 +117,9 @@ cat <<EOF
     $CLI lock on|off         lock on lid close (opt-in)
     $CLI doctor              reconcile toggle vs inhibitor
 
-  Bar: Lid icon near the clock — tap for the two switches, Repair, Uninstall.
-  Not there yet? Enable the widget: omarchy bar / Plugins → Lid.
-  Default section is center (left of the clock); drag it where you want.
+  Bar: Small Laptop indicator integrated with Reminder/StayAwake/etc.
+       left of the clock — same size/style as Omarchy's original indicators.
+       Click the  to toggle lid ignore.
 
   Behavior:
     lid on  → inhibitor active (handle-lid-switch), closing lid only powers
