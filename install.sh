@@ -38,6 +38,97 @@ stage_plugin() {
   rm -rf "$retired"
 }
 
+OMARCHY_SRC="${OMARCHY_PATH:-/usr/share/omarchy}"
+
+# Omarchy's Indicators widget hardcodes its list and loads each entry from
+# ../indicators/<Name>.qml INSIDE its own plugin directory, so no external
+# plugin can contribute one. Cloning is the supported route — the built-in's
+# manifest even carries omarchy.clonePaths for exactly this — but a plain clone
+# is then a frozen fork nobody owns: it stops receiving Omarchy's own indicator
+# fixes and drifts silently.
+#
+# So derive it instead, the same way omarchy-matrix derives its lock screen:
+# rebuild from Omarchy's CURRENT source on every install and every update, and
+# drop Laptop.qml in. The clone stops being something to back up and becomes
+# something reproducible from this repo.
+derive_indicators() {
+  local src_widget="$OMARCHY_SRC/shell/plugins/bar/widgets"
+  local src_ind="$OMARCHY_SRC/shell/plugins/bar/indicators"
+  if [[ ! -f "$src_widget/Indicators.qml" || ! -d "$src_ind" ]]; then
+    echo "  cannot find Omarchy's indicators source; skipping the bar indicator" >&2
+    return 0
+  fi
+
+  # Reuse whatever clone is already here, whatever it is called — `omarchy
+  # plugin clone` names it <user>.indicators and the user may have renamed it.
+  local id="" d
+  for d in "$PLUGINS_DIR"/*.indicators; do
+    [[ -d "$d" ]] || continue
+    [[ "$(jq -r '.omarchy.clonedFrom // empty' "$d/manifest.json" 2>/dev/null)" == "omarchy.indicators" ]] || continue
+    id="$(basename "$d")"; break
+  done
+  [[ -n "$id" ]] || id="${USER}.indicators"
+
+  local dest="$PLUGINS_DIR/$id" staging="$PLUGINS_DIR/.$id.staging" retired="$PLUGINS_DIR/.$id.retired"
+  rm -rf "$staging" "$retired"
+  mkdir -p "$staging/indicators"
+
+  # Two patches, and the first is not cosmetic. In Omarchy's tree Indicators.qml
+  # sits in widgets/ and the entries live at bar/indicators/, so it loads them
+  # with "../indicators/". In a clone both sit at the top level and that ".."
+  # points outside the plugin — the widget silently loads nothing at all.
+  # The second puts Laptop in the default list so it shows without anyone having
+  # to name it in shell.json.
+  #
+  # Both are guarded: if Omarchy's source moves far enough that a patch no
+  # longer fits, this abandons the rebuild and leaves the working clone alone
+  # rather than installing something broken.
+  local widget; widget=$(cat "$src_widget/Indicators.qml")
+  case "$widget" in
+    *'Qt.resolvedUrl("../indicators/"'*) ;;
+    *) echo "  Omarchy's Indicators.qml no longer loads from ../indicators/; leaving $id alone" >&2
+       rm -rf "$staging"; return 0 ;;
+  esac
+  case "$widget" in
+    *'defaultIndicatorEntries: ['*) ;;
+    *) echo "  Omarchy's Indicators.qml no longer lists defaultIndicatorEntries; leaving $id alone" >&2
+       rm -rf "$staging"; return 0 ;;
+  esac
+  printf '%s\n' "$widget" \
+    | sed -e 's|Qt\.resolvedUrl("\.\./indicators/"|Qt.resolvedUrl("indicators/"|' \
+          -e 's|\(defaultIndicatorEntries: \[[^]]*\)\]|\1, "Laptop" ]|' \
+    > "$staging/Indicators.qml"
+  cp -f "$src_ind"/*.qml "$staging/indicators/"
+  cp -f "$HERE/indicators/Laptop.qml" "$staging/indicators/Laptop.qml"
+
+  # The manifest is Omarchy's, re-pointed at this id and told who owns it.
+  # derivedBy is what stops a backup tool from freezing a copy of something that
+  # is meant to be rebuilt — omarchy-replicant reads it and leaves this alone.
+  # Laptop is added to the widget's own option list so it shows in bar settings.
+  jq --arg id "$id" --arg cli "$CLI" '
+      .id = $id
+    | .name = "Indicators"
+    | .omarchy.clonedFrom = "omarchy.indicators"
+    | .omarchy.derivedBy = $cli
+    | del(.omarchy.clonePaths)
+    | .barWidget.schema = (.barWidget.schema | map(
+        if .key == "items" then
+          .options += [{value:"Laptop", label:"Laptop",
+                        description:"Lid-closed behaviour (Sleepwalker)"}]
+        else . end))
+  ' "$src_widget/Indicators.manifest.json" > "$staging/manifest.json"
+
+  if ! omarchy-plugin-validate "$staging" >/dev/null; then
+    rm -rf "$staging"
+    echo "  the derived $id does not pass omarchy-plugin-validate; leaving the existing one alone" >&2
+    return 0
+  fi
+  [[ ! -e $dest ]] || mv "$dest" "$retired"
+  mv "$staging" "$dest"
+  rm -rf "$retired"
+  echo "· bar indicator derived into $id (from $src_ind)"
+}
+
 echo "· plugin $ID"
 mkdir -p "$PLUGINS_DIR"
 stage_plugin "$ID"
@@ -72,6 +163,11 @@ if [[ -f $HOME/.local/state/omarchy/toggles/sleepwalker || -f $HOME/.local/state
   systemctl --user enable --now "$SERVICE" >/dev/null 2>&1 || systemctl --user start "$SERVICE" >/dev/null 2>&1 || true
 fi
 
+# Before the --sync exit: deriving is staging, not enabling, and --sync is what
+# the post-update hook calls. Leaving it after meant the one caller that exists
+# to rebuild the clone after an Omarchy update never rebuilt it.
+derive_indicators
+
 if ((SYNC_ONLY)); then
   omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
   exit 0
@@ -90,7 +186,7 @@ if command -v jq >/dev/null 2>&1 && [[ -f "$HOME/.config/omarchy/shell.json" ]];
     .bar.layout.center |= map(select(.id != "'"$ID"'"))
     | if .bar.layout.center then
         .bar.layout.center |= map(
-          if .id == "cyberdyne.indicators" then
+          if (.id | test("\\.indicators$")) then
             .items = (["Dictation","ScreenRecording","Reminder","NightLight","Dnd","StayAwake","Laptop"])
             | .alwaysShow = true
           else . end
