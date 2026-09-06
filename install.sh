@@ -126,8 +126,10 @@ derive_indicators() {
   [[ ! -e $dest ]] || mv "$dest" "$retired"
   mv "$staging" "$dest"
   rm -rf "$retired"
+  DERIVED_INDICATORS_ID="$id"
   echo "· bar indicator derived into $id (from $src_ind)"
 }
+DERIVED_INDICATORS_ID=""
 
 echo "· plugin $ID"
 mkdir -p "$PLUGINS_DIR"
@@ -168,6 +170,16 @@ fi
 # to rebuild the clone after an Omarchy update never rebuilt it.
 derive_indicators
 
+# The hook that re-derives it after an Omarchy update. Without this installed,
+# the clone is rebuilt exactly once — at install — and then quietly becomes the
+# frozen fork the derivation exists to avoid. It was written and never wired up.
+HOOKS_DIR="$HOME/.config/omarchy/hooks/post-update.d"
+if [[ -f "$HERE/hooks/post-update" ]]; then
+  mkdir -p "$HOOKS_DIR"
+  install -m 755 "$HERE/hooks/post-update" "$HOOKS_DIR/sleepwalker"
+  echo "· post-update hook in $HOOKS_DIR/sleepwalker"
+fi
+
 if ((SYNC_ONLY)); then
   omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
   exit 0
@@ -180,20 +192,34 @@ sleep 0.5
 # small indicator inside cyberdyne.indicators (same strip as Reminder/StayAwake)
 # — matches Omarchy's original indicator styling (statusSlot, dim 0.45).
 omarchy plugin disable "$ID" >/dev/null 2>&1 || true
+# The bar layout. Three things at once, and the dedupe is not decoration: an
+# install after an uninstall found BOTH the old clone id and the built-in in
+# the layout, renamed both to the clone and appended Laptop twice, so the strip
+# drew itself twice with a doubled icon. Rename, collapse to the first, then add.
 if command -v jq >/dev/null 2>&1 && [[ -f "$HOME/.config/omarchy/shell.json" ]]; then
   tmp=$(mktemp)
-  jq '
-    .bar.layout.center |= map(select(.id != "'"$ID"'"))
-    | if .bar.layout.center then
-        .bar.layout.center |= map(
-          if (.id | test("\\.indicators$")) then
-            .items = (["Dictation","ScreenRecording","Reminder","NightLight","Dnd","StayAwake","Laptop"])
-            | .alwaysShow = true
-          else . end
-        )
-      else . end
-  ' "$HOME/.config/omarchy/shell.json" > "$tmp" 2>/dev/null && mv "$tmp" "$HOME/.config/omarchy/shell.json" || rm -f "$tmp"
+  jq --arg widget "$ID" --arg derived "${DERIVED_INDICATORS_ID:-$USER.indicators}" '
+    .bar.layout.center |= (
+        map(select(.id != $widget))
+      # Point the slot at the DERIVED clone. A fresh layout only has Omarchy
+      # built-in, which has no Laptop.qml — adding Laptop to its items asks it
+      # to load a file that is not there and the indicator never appears.
+      | map(if (.id | test("\\.indicators$")) then .id = $derived else . end)
+      | reduce .[] as $e ([]; if any(.[]; .id == $e.id) then . else . + [$e] end)
+      # Append, never rebuild: `unique` would sort, and this order is the order
+      # the icons appear in. alwaysShow is left alone — an ACTIVE indicator shows
+      # without it, which is exactly when this one matters, and how somebody
+      # reveals their inactive indicators is not ours to decide.
+      | map(if .id == $derived then
+              .items = ((.items // ["Dictation","ScreenRecording","Reminder","NightLight","Dnd","StayAwake"])
+                        | if index("Laptop") then . else . + ["Laptop"] end)
+            else . end)
+    )
+  ' "$HOME/.config/omarchy/shell.json" > "$tmp" 2>/dev/null \
+    && mv "$tmp" "$HOME/.config/omarchy/shell.json" || rm -f "$tmp"
 fi
+# The clone replaces the built-in; both in the bar would draw the strip twice.
+[[ -n "$DERIVED_INDICATORS_ID" ]] && omarchy plugin disable omarchy.indicators >/dev/null 2>&1 || true
 omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
 sleep 0.3
 
