@@ -10,15 +10,13 @@ Keep working with the lid closed — a Laptop indicator inside Omarchy's own ind
 omarchy plugin add https://github.com/tymurbogach/omarchy-sleepwalker.git --enable
 ```
 
-That alone is a working install: indicator + lid inhibitor, straight from the store. No scripts to run.
-
-For the full lid-closed behaviour (closed lid powers off the panel **without locking** — stock locks), one extra step:
+That alone stages the strip (it inherits your current indicator list). Then run:
 
 ```sh
 ./install.sh
 ```
 
-It only puts the CLI on `PATH` and installs the lid-close shim. Everything lands inside `$HOME` — no sudo, no `/usr` writes, no systemd units. The inhibitor is held by the plugin's own service while the toggle is on.
+It adds the Laptop icon to the strip, puts the CLI on `PATH`, and installs the lid-close shim for the no-lock behaviour. Everything lands inside `$HOME` — no sudo, no `/usr` writes, no systemd units. The inhibitor is held by the plugin's own service while the toggle is on.
 
 ## Usage
 

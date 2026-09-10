@@ -142,6 +142,22 @@ install -m 755 "$HERE/bin/omarchy-system-lid-close" "$BIN_DIR/omarchy-system-lid
 
 if omarchy plugin list --json 2>/dev/null | jq -e --arg id "$ID" 'any(.[]; .id == $id)' >/dev/null; then
   omarchy plugin enable "$ID" >/dev/null 2>&1 || true
+  # The enable replaces the built-in strip in place and inherits its explicit
+  # `items` — which predate Laptop. Append it once so the icon actually shows.
+  # (No `items` key at all means "defaults", which already include Laptop.)
+  if command -v jq >/dev/null 2>&1 && [[ -f $HOME/.config/omarchy/shell.json ]]; then
+    tmp=$(mktemp)
+    jq --arg id "$ID" '
+      .bar.layout |= with_entries(
+        .value |= (map(
+          if type == "object" and (.id // "") == $id
+             and (.items | type) == "array" and (index("Laptop") | not)
+          then .items += ["Laptop"] else . end
+        ) // .)
+      )' \
+      "$HOME/.config/omarchy/shell.json" > "$tmp" 2>/dev/null \
+      && mv "$tmp" "$HOME/.config/omarchy/shell.json" || rm -f "$tmp"
+  fi
   omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
 else
   echo "· plugin not added yet — finish with:"

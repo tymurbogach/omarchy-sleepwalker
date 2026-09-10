@@ -68,6 +68,22 @@ if command -v jq >/dev/null 2>&1 && [[ -f "$HOME/.config/omarchy/shell.json" ]];
   done
 fi
 
+# Removing the plugin restores the built-in strip with a copy of OUR entry —
+# including "Laptop" in items, which the built-in cannot load. Take it out.
+if command -v jq >/dev/null 2>&1 && [[ -f "$HOME/.config/omarchy/shell.json" ]]; then
+  tmp=$(mktemp)
+  jq '
+    .bar.layout |= with_entries(
+      .value |= (map(
+        if type == "object" and (.id // "") == "omarchy.indicators"
+           and (.items | type) == "array"
+        then .items |= map(select(. != "Laptop")) else . end
+      ) // .)
+    )' \
+    "$HOME/.config/omarchy/shell.json" > "$tmp" 2>/dev/null \
+    && mv "$tmp" "$HOME/.config/omarchy/shell.json" || rm -f "$tmp"
+fi
+
 omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
 
 cat <<EOF
