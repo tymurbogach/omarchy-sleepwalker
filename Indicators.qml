@@ -4,6 +4,9 @@
 //   1. Qt.resolvedUrl("../indicators/" -> Qt.resolvedUrl("indicators/"
 //      (in a clone both files sit at the top level; ".." points outside)
 //   2. defaultIndicatorEntries gains "Laptop" (Sleepwalker lid behaviour).
+//   3. Stock IpcHandler (target "omarchy.indicators") removed: the disabled
+//      built-in keeps serving that target and nothing calls it, so keeping it
+//      only logged a handler-collision warning on every load.
 
 import QtQuick
 import Quickshell
@@ -172,13 +175,7 @@ BarWidget {
     ? activeVerticalBlock.implicitHeight + inactiveVerticalArea.implicitHeight
     : Math.max(activeHorizontalBlock.implicitHeight, inactiveHorizontalArea.implicitHeight)
 
-  IpcHandler {
-    target: "omarchy.indicators"
-
-    function refresh(): void {
-      root.broadcast("refresh")
-    }
-  }
+  // (Stock IpcHandler removed — see header patch 3.)
 
   Timer {
     id: indicatorHideTimer

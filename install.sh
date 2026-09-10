@@ -55,12 +55,17 @@ sync_stock() {
       '//   1. Qt.resolvedUrl("../indicators/" -> Qt.resolvedUrl("indicators/"' \
       '//      (in a clone both files sit at the top level; ".." points outside)' \
       '//   2. defaultIndicatorEntries gains "Laptop" (Sleepwalker lid behaviour).' \
+      '//   3. Stock IpcHandler (target "omarchy.indicators") removed: the disabled' \
+      '//      built-in keeps serving that target and nothing calls it, so keeping it' \
+      '//      only logged a handler-collision warning on every load.' \
       ''
     sed -e 's|Qt\.resolvedUrl("\.\./indicators/"|Qt.resolvedUrl("indicators/"|' \
         -e 's|defaultIndicatorEntries: \[ "Dictation", "ScreenRecording", "Reminder", "NightLight", "Dnd", "StayAwake" \]|defaultIndicatorEntries: [ "Dictation", "ScreenRecording", "Reminder", "NightLight", "Dnd", "StayAwake", "Laptop" ]|' \
-        "$src_widget"
+        "$src_widget" \
+    | perl -0777 -pe 's/  IpcHandler \{\n    target: "omarchy\.indicators"\n\n    function refresh\(\): void \{\n      root\.broadcast\("refresh"\)\n    \}\n  \}\n\n/  \/\/ (Stock IpcHandler removed — see header patch 3.)\n\n/'
   } > "$HERE/Indicators.qml"
   grep -q '"Laptop"' "$HERE/Indicators.qml" || { echo "patch 2 did not apply — aborting" >&2; exit 1; }
+  grep -q 'target: "omarchy.indicators"' "$HERE/Indicators.qml" && { echo "patch 3 did not apply — aborting" >&2; exit 1; } || true
 
   local f
   for f in Dictation Dnd NightLight Reminder ScreenRecording StayAwake; do
