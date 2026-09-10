@@ -87,6 +87,9 @@ fi
 
 omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
 
+# Same as install: only a restart rebuilds the bar from the edited layout.
+omarchy-restart-shell >/dev/null 2>&1 || true
+
 cat <<EOF
   Removed (CLI, shim, toggles, legacy).
   Lid close is back to stock: suspend-then-hibernate.

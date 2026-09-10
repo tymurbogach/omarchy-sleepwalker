@@ -172,6 +172,10 @@ fi
 echo
 "$BIN_DIR/$CLI" doctor || true
 
+# Rescan reloads QML, but only a shell restart rebuilds the bar from the new
+# layout — without it the strip keeps rendering the previous widget.
+omarchy-restart-shell >/dev/null 2>&1 || true
+
 cat <<EOF
 
   Done. CLI + shim installed; the plugin itself comes from the store:
