@@ -2,19 +2,82 @@
   "schemaVersion": 1,
   "id": "io.github.tymurbogach.sleepwalker",
   "name": "Sleepwalker",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "tymurbogach",
   "license": "MIT",
-  "description": "Keep working with lid closed — tap to inhibit suspend. Screen off, no lock.",
-  "kinds": ["bar-widget"],
-  "activation": "on-demand",
+  "description": "Keep working with the lid closed — Laptop indicator with lid inhibit, no lock.",
+  "kinds": [
+    "bar-widget",
+    "service"
+  ],
+  "keepLoaded": true,
   "entryPoints": {
-    "barWidget": "Panel.qml"
+    "barWidget": "Indicators.qml",
+    "service": "Service.qml"
   },
   "barWidget": {
-    "displayName": "Sleepwalker",
-    "description": "Lid closed keeps working, screen off. Tap to toggle inhibit + optional lock.",
-    "category": "System",
-    "defaultSection": "center"
+    "displayName": "Indicators (Sleepwalker)",
+    "description": "Omarchy's indicator strip plus a Laptop indicator for lid-closed behaviour.",
+    "category": "Status",
+    "allowMultiple": true,
+    "defaultSection": "center",
+    "schema": [
+      {
+        "key": "items",
+        "type": "multiselect",
+        "label": "Indicators",
+        "description": "Choose which indicators this widget instance should show. Leave empty to show all indicators.",
+        "noSelectionText": "All indicators",
+        "placeholderText": "Search indicators...",
+        "emptyText": "No indicators",
+        "options": [
+          {
+            "value": "Dictation",
+            "label": "Dictation",
+            "description": "Voice typing status"
+          },
+          {
+            "value": "ScreenRecording",
+            "label": "Screen recording",
+            "description": "GPU screen recorder status"
+          },
+          {
+            "value": "Reminder",
+            "label": "Reminder",
+            "description": "Queued reminder status"
+          },
+          {
+            "value": "NightLight",
+            "label": "Night light",
+            "description": "Blue-light filter"
+          },
+          {
+            "value": "Dnd",
+            "label": "Do not disturb",
+            "description": "Notification silencing"
+          },
+          {
+            "value": "StayAwake",
+            "label": "Stay awake",
+            "description": "Idle lock and screensaver override"
+          },
+          {
+            "value": "Laptop",
+            "label": "Laptop",
+            "description": "Lid-closed behaviour (Sleepwalker)"
+          }
+        ]
+      },
+      {
+        "key": "alwaysShow",
+        "type": "boolean",
+        "label": "Always Show",
+        "description": "Show inactive indicators without waiting for hover.",
+        "defaultValue": false
+      }
+    ]
+  },
+  "omarchy": {
+    "clonedFrom": "omarchy.indicators"
   }
 }

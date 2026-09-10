@@ -2,54 +2,50 @@ import QtQuick
 import Quickshell.Io
 import qs.Ui
 
+// Sleepwalker indicator — lives inside this plugin's Indicators clone, so it
+// renders at the same 21px slot / 10pt caption size as Dictation, StayAwake…
 BarIndicator {
   id: root
 
-  property bool laptopOn: false
+  // Live service owned by this same plugin (Service.qml). The bar facade
+  // allows a widget its own service id, so this is reactive: no polling.
+  readonly property var sleepService: (bar && bar.shell && typeof bar.shell.serviceFor === "function")
+    ? bar.shell.serviceFor("io.github.tymurbogach.sleepwalker") : null
+  readonly property bool svcAvailable: sleepService !== null && sleepService !== undefined
 
-  active: laptopOn
-  // FA laptop mono-glyph  — with chassis, same height/centering as others
+  // Fallback when the service is unreachable (never on a healthy install):
+  // the CLI bundled in this plugin, resolved relative to this file — never
+  // looked up on PATH, because `omarchy plugin add` runs no install hook.
+  readonly property string fallbackCli: String(Qt.resolvedUrl("../bin/omarchy-sleepwalker")).replace(/^file:\/\//, "")
+
+  property bool probedOn: false
+
+  active: svcAvailable ? (sleepService.lidOn === true) : probedOn
+  // FA laptop mono-glyph — with chassis, same height/centering as others
   activeText: ""
   inactiveText: ""
   activeTooltipText: "Laptop ON — lid closed keeps working (click to turn off)"
   inactiveTooltipText: "Laptop OFF — lid suspends (click to turn on)"
 
-  function refresh() {
-    if (statusProc.running) return
-    statusProc.running = true
-  }
-
-  property bool debouncing: false
-  property bool pendingToggle: false
-
   function toggle() {
+    if (svcAvailable && typeof sleepService.toggleLid === "function") {
+      sleepService.toggleLid()
+      return
+    }
     if (toggleProc.running || statusProc.running) {
       pendingToggle = true
       return
     }
-    if (debouncing) {
-      pendingToggle = true
-      return
-    }
-    debouncing = true
-    debounce.restart()
-    // optimistic flip — hover does not wait for statusProc
-    laptopOn = !laptopOn
     toggleProc.running = true
   }
 
-  Timer {
-    id: debounce
-    interval: 600
-    repeat: false
-    onTriggered: {
-      root.debouncing = false
-      if (root.pendingToggle) {
-        root.pendingToggle = false
-        root.toggle()
-      }
-    }
+  function refresh() {
+    if (svcAvailable) return
+    if (statusProc.running) return
+    statusProc.running = true
   }
+
+  property bool pendingToggle: false
 
   onBarChanged: refresh()
   Component.onCompleted: refresh()
@@ -62,40 +58,39 @@ BarIndicator {
 
   Process {
     id: toggleProc
-    command: ["omarchy-sleepwalker", "lid", "toggle"]
+    command: [root.fallbackCli, "lid", "toggle"]
     onExited: function(code) {
-      // does not overwrite optimistic flip, only reconciles if systemd failed
       root.refresh()
       settle.restart()
       if (root.pendingToggle) {
         root.pendingToggle = false
-        // let debounce trigger the next toggle
+        if (!root.svcAvailable) root.toggle()
       }
     }
   }
 
   Process {
     id: statusProc
-    command: ["omarchy-sleepwalker", "status", "--json"]
+    command: [root.fallbackCli, "status", "--json"]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
         try {
           var data = JSON.parse(text || "{}")
-          var actual = data.active === true
-          if (!debouncing && !toggleProc.running) root.laptopOn = actual
+          root.probedOn = data.active === true
         } catch(e) {
-          if (!debouncing && !toggleProc.running) root.laptopOn = false
+          root.probedOn = false
         }
       }
     }
     onExited: function(code) {
-      if (code !== 0 && !debouncing && !toggleProc.running) root.laptopOn = false
+      if (code !== 0) root.probedOn = false
     }
   }
 
   Timer { id: settle; interval: 300; repeat: false; onTriggered: root.refresh() }
-  Timer { interval: 5000; running: root.indicatorHost && root.indicatorHost.visible; repeat: true; onTriggered: root.refresh() }
+  // Fallback poll only — the service path is push-based and needs none.
+  Timer { interval: 30000; running: !root.svcAvailable; repeat: true; onTriggered: root.refresh() }
 
   onPressed: function() { root.toggle() }
 }

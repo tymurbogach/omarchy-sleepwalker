@@ -1,7 +1,18 @@
 #!/usr/bin/env bash
-# Installs the Sleepwalker plugin: bar widget + inhibitor + lid-close shim.
-#   ./install.sh
-#   ./install.sh --sync   # only (re)stage plugin + bin, no enable/restart
+# Sleepwalker install — thin on purpose.
+#
+# The plugin itself needs no install step: `omarchy plugin add <repo> --enable`
+# is a working install (indicator + inhibitor, straight from the store).
+# This script only does the two things the store cannot:
+#   1. puts the CLI on PATH (~/.local/bin) for terminal use
+#   2. installs the lid-close shim (~/.local/bin/omarchy-system-lid-close)
+#      so a closed lid powers off the panel WITHOUT locking (stock locks)
+#
+# Everything is written inside $HOME. No sudo, no /usr, no services.
+#
+#   ./install.sh              full: migrate legacy + CLI + shim + enable
+#   ./install.sh --sync-stock refresh Indicators.qml + stock indicators from
+#                             Omarchy's current source (after `omarchy update`)
 set -euo pipefail
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -9,246 +20,147 @@ ID="io.github.tymurbogach.sleepwalker"
 CLI="omarchy-sleepwalker"
 OLD_ID="io.github.tymurbogach.lid"
 OLD_CLI="omarchy-lid"
-OLD_SERVICE="omarchy-lid-inhibit.service"
-SYNC_ONLY=0
-[[ ${1:-} != "--sync" ]] || SYNC_ONLY=1
+LEGACY_UNITS=("omarchy-sleepwalker-inhibit.service" "omarchy-lid-inhibit.service")
 
 command -v omarchy >/dev/null || { echo "this needs Omarchy" >&2; exit 1; }
 
 PLUGINS_DIR="$HOME/.config/omarchy/plugins"
 BIN_DIR="$HOME/.local/bin"
 SYSTEMD_USER_DIR="$HOME/.config/systemd/user"
-SERVICE="omarchy-sleepwalker-inhibit.service"
-
-stage_plugin() {
-  local id="$1"
-  local dest="$PLUGINS_DIR/$id" staging="$PLUGINS_DIR/.$id.staging" retired="$PLUGINS_DIR/.$id.retired"
-  rm -rf "$staging" "$retired"
-  mkdir -p "$staging"
-  cp -f "$HERE/manifest.json" "$staging/manifest.json"
-  cp -f "$HERE/Panel.qml" "$staging/Panel.qml"
-
-  if ! omarchy-plugin-validate "$staging" >/dev/null; then
-    rm -rf "$staging"
-    echo "  $id does not pass omarchy-plugin-validate; aborting" >&2
-    exit 1
-  fi
-  [[ ! -e $dest ]] || mv "$dest" "$retired"
-  mv "$staging" "$dest"
-  rm -rf "$retired"
-}
-
 OMARCHY_SRC="${OMARCHY_PATH:-/usr/share/omarchy}"
 
-# Omarchy's Indicators widget hardcodes its list and loads each entry from
-# ../indicators/<Name>.qml INSIDE its own plugin directory, so no external
-# plugin can contribute one. Cloning is the supported route — the built-in's
-# manifest even carries omarchy.clonePaths for exactly this — but a plain clone
-# is then a frozen fork nobody owns: it stops receiving Omarchy's own indicator
-# fixes and drifts silently.
-#
-# So derive it instead, the same way omarchy-matrix derives its lock screen:
-# rebuild from Omarchy's CURRENT source on every install and every update, and
-# drop Laptop.qml in. The clone stops being something to back up and becomes
-# something reproducible from this repo.
-derive_indicators() {
-  local src_widget="$OMARCHY_SRC/shell/plugins/bar/widgets"
+# --- refresh derived files from Omarchy's current source -------------------
+# Indicators.qml is a clone of stock plus two documented patches (see the file
+# header). The six sibling indicators are verbatim copies. Re-run after an
+# Omarchy update so the strip never becomes a frozen fork.
+sync_stock() {
+  local src_widget="$OMARCHY_SRC/shell/plugins/bar/widgets/Indicators.qml"
   local src_ind="$OMARCHY_SRC/shell/plugins/bar/indicators"
-  if [[ ! -f "$src_widget/Indicators.qml" || ! -d "$src_ind" ]]; then
-    echo "  cannot find Omarchy's indicators source; skipping the bar indicator" >&2
-    return 0
-  fi
+  [[ -f $src_widget && -d $src_ind ]] || { echo "cannot find Omarchy's indicators source" >&2; exit 1; }
 
-  # Reuse whatever clone is already here, whatever it is called — `omarchy
-  # plugin clone` names it <user>.indicators and the user may have renamed it.
-  local id="" d
-  for d in "$PLUGINS_DIR"/*.indicators; do
-    [[ -d "$d" ]] || continue
-    [[ "$(jq -r '.omarchy.clonedFrom // empty' "$d/manifest.json" 2>/dev/null)" == "omarchy.indicators" ]] || continue
-    id="$(basename "$d")"; break
-  done
-  [[ -n "$id" ]] || id="${USER}.indicators"
-
-  local dest="$PLUGINS_DIR/$id" staging="$PLUGINS_DIR/.$id.staging" retired="$PLUGINS_DIR/.$id.retired"
-  rm -rf "$staging" "$retired"
-  mkdir -p "$staging/indicators"
-
-  # Two patches, and the first is not cosmetic. In Omarchy's tree Indicators.qml
-  # sits in widgets/ and the entries live at bar/indicators/, so it loads them
-  # with "../indicators/". In a clone both sit at the top level and that ".."
-  # points outside the plugin — the widget silently loads nothing at all.
-  # The second puts Laptop in the default list so it shows without anyone having
-  # to name it in shell.json.
-  #
-  # Both are guarded: if Omarchy's source moves far enough that a patch no
-  # longer fits, this abandons the rebuild and leaves the working clone alone
-  # rather than installing something broken.
-  local widget; widget=$(cat "$src_widget/Indicators.qml")
-  case "$widget" in
+  case "$(cat "$src_widget")" in
     *'Qt.resolvedUrl("../indicators/"'*) ;;
-    *) echo "  Omarchy's Indicators.qml no longer loads from ../indicators/; leaving $id alone" >&2
-       rm -rf "$staging"; return 0 ;;
+    *) echo "Omarchy's Indicators.qml no longer loads from ../indicators/ — refusing to regenerate" >&2; exit 1 ;;
   esac
-  case "$widget" in
+  case "$(cat "$src_widget")" in
     *'defaultIndicatorEntries: ['*) ;;
-    *) echo "  Omarchy's Indicators.qml no longer lists defaultIndicatorEntries; leaving $id alone" >&2
-       rm -rf "$staging"; return 0 ;;
+    *) echo "Omarchy's Indicators.qml no longer lists defaultIndicatorEntries — refusing to regenerate" >&2; exit 1 ;;
   esac
-  printf '%s\n' "$widget" \
-    | sed -e 's|Qt\.resolvedUrl("\.\./indicators/"|Qt.resolvedUrl("indicators/"|' \
-          -e 's|\(defaultIndicatorEntries: \[[^]]*\)\]|\1, "Laptop" ]|' \
-    > "$staging/Indicators.qml"
-  cp -f "$src_ind"/*.qml "$staging/indicators/"
-  cp -f "$HERE/indicators/Laptop.qml" "$staging/indicators/Laptop.qml"
 
-  # The manifest is Omarchy's, re-pointed at this id and told who owns it.
-  # derivedBy is what stops a backup tool from freezing a copy of something that
-  # is meant to be rebuilt — omarchy-replicant reads it and leaves this alone.
-  # Laptop is added to the widget's own option list so it shows in bar settings.
-  jq --arg id "$id" --arg cli "$CLI" '
-      .id = $id
-    | .name = "Indicators"
-    | .omarchy.clonedFrom = "omarchy.indicators"
-    | .omarchy.derivedBy = $cli
-    | del(.omarchy.clonePaths)
-    | .barWidget.schema = (.barWidget.schema | map(
-        if .key == "items" then
-          .options += [{value:"Laptop", label:"Laptop",
-                        description:"Lid-closed behaviour (Sleepwalker)"}]
-        else . end))
-  ' "$src_widget/Indicators.manifest.json" > "$staging/manifest.json"
+  {
+    printf '%s\n' \
+      '// Sleepwalker — derived from Omarchy stock Indicators.qml.' \
+      '// Regenerate after an Omarchy update with: ./install.sh --sync-stock' \
+      '// Local patches vs stock (keep them minimal so diffs stay reviewable):' \
+      '//   1. Qt.resolvedUrl("../indicators/" -> Qt.resolvedUrl("indicators/"' \
+      '//      (in a clone both files sit at the top level; ".." points outside)' \
+      '//   2. defaultIndicatorEntries gains "Laptop" (Sleepwalker lid behaviour).' \
+      ''
+    sed -e 's|Qt\.resolvedUrl("\.\./indicators/"|Qt.resolvedUrl("indicators/"|' \
+        -e 's|defaultIndicatorEntries: \[ "Dictation", "ScreenRecording", "Reminder", "NightLight", "Dnd", "StayAwake" \]|defaultIndicatorEntries: [ "Dictation", "ScreenRecording", "Reminder", "NightLight", "Dnd", "StayAwake", "Laptop" ]|' \
+        "$src_widget"
+  } > "$HERE/Indicators.qml"
+  grep -q '"Laptop"' "$HERE/Indicators.qml" || { echo "patch 2 did not apply — aborting" >&2; exit 1; }
 
-  if ! omarchy-plugin-validate "$staging" >/dev/null; then
-    rm -rf "$staging"
-    echo "  the derived $id does not pass omarchy-plugin-validate; leaving the existing one alone" >&2
-    return 0
-  fi
-  [[ ! -e $dest ]] || mv "$dest" "$retired"
-  mv "$staging" "$dest"
-  rm -rf "$retired"
-  DERIVED_INDICATORS_ID="$id"
-  echo "· bar indicator derived into $id (from $src_ind)"
+  local f
+  for f in Dictation Dnd NightLight Reminder ScreenRecording StayAwake; do
+    cp -f "$src_ind/$f.qml" "$HERE/indicators/$f.qml"
+  done
+  echo "· stock refreshed (Indicators.qml + 6 indicators); Laptop.qml untouched"
 }
-DERIVED_INDICATORS_ID=""
 
-echo "· plugin $ID"
-mkdir -p "$PLUGINS_DIR"
-stage_plugin "$ID"
+if [[ ${1:-} == "--sync-stock" ]]; then
+  sync_stock
+  exit 0
+fi
 
-# Migrate from old Lid if present
-echo "· migrating from $OLD_ID if present"
+# --- legacy migration (<0.2.0: separate bar-widget + systemd unit + derived clone) ---
+
+echo "· migrating legacy state if present"
+
+# Legacy inhibitor units: the Service owns the inhibitor now.
+for u in "${LEGACY_UNITS[@]}"; do
+  if [[ -f $SYSTEMD_USER_DIR/$u ]]; then
+    systemctl --user disable --now "$u" >/dev/null 2>&1 || systemctl --user stop "$u" >/dev/null 2>&1 || true
+    rm -f "$SYSTEMD_USER_DIR/$u"
+  fi
+done
+systemctl --user daemon-reload >/dev/null 2>&1 || true
+
+# Legacy plugin dirs (old lid id, staging leftovers).
 omarchy plugin remove "$OLD_ID" --yes >/dev/null 2>&1 || true
 rm -rf "$PLUGINS_DIR/$OLD_ID" "$PLUGINS_DIR/.$OLD_ID.staging" "$PLUGINS_DIR/.$OLD_ID.retired" 2>/dev/null || true
-for d in "$PLUGINS_DIR"/.*.bak.*; do [[ -d $d ]] || continue; id=$(jq -r '.id // empty' "$d/manifest.json" 2>/dev/null || echo ""); [[ $id == "$OLD_ID" ]] && rm -rf "$d"; done
-systemctl --user disable --now "$OLD_SERVICE" >/dev/null 2>&1 || systemctl --user stop "$OLD_SERVICE" >/dev/null 2>&1 || true
-rm -f "$SYSTEMD_USER_DIR/$OLD_SERVICE" 2>/dev/null || true
-rm -f "$BIN_DIR/$OLD_CLI" "$BIN_DIR/${OLD_CLI}-uninstall" 2>/dev/null || true
+
+# Legacy derived indicators clones (built by <0.2.0 install.sh): the plugin IS
+# the clone now, so these are redundant forks. Remove ours, spare others'.
+for d in "$PLUGINS_DIR"/*.indicators; do
+  [[ -d $d ]] || continue
+  [[ "$(jq -r '.omarchy.clonedFrom // empty' "$d/manifest.json" 2>/dev/null)" == "omarchy.indicators" ]] || continue
+  if [[ "$(jq -r '.omarchy.derivedBy // empty' "$d/manifest.json" 2>/dev/null)" == "$CLI" ]]; then
+    echo "· removing legacy derived clone $(basename "$d")"
+    rm -rf "$d"
+    omarchy plugin enable omarchy.indicators >/dev/null 2>&1 || true
+  fi
+done
+
+# Legacy separate-widget slot: <0.2.0 staged a big BarIconButton beside the
+# strip. The new model has no such widget; any layout entry with our id that
+# carries no `items` is that stale slot. (Entries WITH items are the new
+# indicators strip — never touch those.)
+if command -v jq >/dev/null 2>&1 && [[ -f $HOME/.config/omarchy/shell.json ]]; then
+  for section in left center right; do
+    tmp=$(mktemp)
+    jq --arg id "$ID" --arg old "$OLD_ID" --arg sec "$section" '
+      .bar.layout[$sec] |= (map(
+        (if type == "string" then . else (.id // "") end) as $eid
+        | select($eid != $old and ($eid != $id or (type == "object" and has("items"))))
+      ) // .)' \
+      "$HOME/.config/omarchy/shell.json" > "$tmp" 2>/dev/null \
+      && mv "$tmp" "$HOME/.config/omarchy/shell.json" || rm -f "$tmp"
+  done
+fi
+
+# Legacy toggle name → new one.
 if [[ -f $HOME/.local/state/omarchy/toggles/lid-ignore && ! -f $HOME/.local/state/omarchy/toggles/sleepwalker ]]; then
   cp -f "$HOME/.local/state/omarchy/toggles/lid-ignore" "$HOME/.local/state/omarchy/toggles/sleepwalker" 2>/dev/null || true
 fi
 
-echo "· $CLI in $BIN_DIR"
+# Legacy PATH leftovers + post-update hook from the derive era.
+rm -f "$BIN_DIR/$OLD_CLI" "$BIN_DIR/${OLD_CLI}-uninstall" "$HOME/.config/omarchy/hooks/post-update.d/sleepwalker" 2>/dev/null || true
+
+# --- the two things the store cannot do ---
+
+echo "· $CLI in $BIN_DIR (terminal use)"
 mkdir -p "$BIN_DIR"
 install -m 755 "$HERE/bin/$CLI" "$BIN_DIR/$CLI"
-# keep legacy symlink for Laptop indicator until it migrates to new CLI
-ln -sf "$BIN_DIR/$CLI" "$BIN_DIR/$OLD_CLI" 2>/dev/null || true
-install -m 755 "$HERE/bin/omarchy-system-lid-close" "$BIN_DIR/omarchy-system-lid-close"
 install -m 755 "$HERE/uninstall.sh" "$BIN_DIR/${CLI}-uninstall"
 
-echo "· systemd user unit $SERVICE"
-mkdir -p "$SYSTEMD_USER_DIR"
-cp -f "$HERE/systemd/user/$SERVICE" "$SYSTEMD_USER_DIR/$SERVICE"
-systemctl --user daemon-reload 2>/dev/null || true
+echo "· lid-close shim (closed lid: screen off, no lock, no suspend)"
+install -m 755 "$HERE/bin/omarchy-system-lid-close" "$BIN_DIR/omarchy-system-lid-close"
 
-# Reconcile inhibitor with existing toggle (so reinstall after reboot keeps state)
-if [[ -f $HOME/.local/state/omarchy/toggles/sleepwalker || -f $HOME/.local/state/omarchy/toggles/lid-ignore ]]; then
-  systemctl --user enable --now "$SERVICE" >/dev/null 2>&1 || systemctl --user start "$SERVICE" >/dev/null 2>&1 || true
-fi
+# --- enable (in-place replace of the built-in strip, settings preserved) ---
 
-# Before the --sync exit: deriving is staging, not enabling, and --sync is what
-# the post-update hook calls. Leaving it after meant the one caller that exists
-# to rebuild the clone after an Omarchy update never rebuilt it.
-derive_indicators
-
-# The hook that re-derives it after an Omarchy update. Without this installed,
-# the clone is rebuilt exactly once — at install — and then quietly becomes the
-# frozen fork the derivation exists to avoid. It was written and never wired up.
-HOOKS_DIR="$HOME/.config/omarchy/hooks/post-update.d"
-if [[ -f "$HERE/hooks/post-update" ]]; then
-  mkdir -p "$HOOKS_DIR"
-  install -m 755 "$HERE/hooks/post-update" "$HOOKS_DIR/sleepwalker"
-  echo "· post-update hook in $HOOKS_DIR/sleepwalker"
-fi
-
-if ((SYNC_ONLY)); then
+if omarchy plugin list --json 2>/dev/null | jq -e --arg id "$ID" 'any(.[]; .id == $id)' >/dev/null; then
+  omarchy plugin enable "$ID" >/dev/null 2>&1 || true
   omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
-  exit 0
+else
+  echo "· plugin not added yet — finish with:"
+  echo "    omarchy plugin add https://github.com/tymurbogach/omarchy-sleepwalker.git --enable"
 fi
-
-omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
-sleep 0.5
-
-# Integrated icon: disable the large separate bar-widget and use the
-# small indicator inside cyberdyne.indicators (same strip as Reminder/StayAwake)
-# — matches Omarchy's original indicator styling (statusSlot, dim 0.45).
-omarchy plugin disable "$ID" >/dev/null 2>&1 || true
-# The bar layout. Three things at once, and the dedupe is not decoration: an
-# install after an uninstall found BOTH the old clone id and the built-in in
-# the layout, renamed both to the clone and appended Laptop twice, so the strip
-# drew itself twice with a doubled icon. Rename, collapse to the first, then add.
-if command -v jq >/dev/null 2>&1 && [[ -f "$HOME/.config/omarchy/shell.json" ]]; then
-  tmp=$(mktemp)
-  jq --arg widget "$ID" --arg derived "${DERIVED_INDICATORS_ID:-$USER.indicators}" '
-    .bar.layout.center |= (
-        map(select(.id != $widget))
-      # Point the slot at the DERIVED clone. A fresh layout only has Omarchy
-      # built-in, which has no Laptop.qml — adding Laptop to its items asks it
-      # to load a file that is not there and the indicator never appears.
-      | map(if (.id | test("\\.indicators$")) then .id = $derived else . end)
-      | reduce .[] as $e ([]; if any(.[]; .id == $e.id) then . else . + [$e] end)
-      # Append, never rebuild: `unique` would sort, and this order is the order
-      # the icons appear in. alwaysShow is left alone — an ACTIVE indicator shows
-      # without it, which is exactly when this one matters, and how somebody
-      # reveals their inactive indicators is not ours to decide.
-      | map(if .id == $derived then
-              .items = ((.items // ["Dictation","ScreenRecording","Reminder","NightLight","Dnd","StayAwake"])
-                        | if index("Laptop") then . else . + ["Laptop"] end)
-            else . end)
-    )
-  ' "$HOME/.config/omarchy/shell.json" > "$tmp" 2>/dev/null \
-    && mv "$tmp" "$HOME/.config/omarchy/shell.json" || rm -f "$tmp"
-fi
-# The clone replaces the built-in; both in the bar would draw the strip twice.
-[[ -n "$DERIVED_INDICATORS_ID" ]] && omarchy plugin disable omarchy.indicators >/dev/null 2>&1 || true
-omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
-sleep 0.3
 
 echo
 "$BIN_DIR/$CLI" doctor || true
 
-# One restart at the end: indicator sizing + single instance guarantee
-omarchy-restart-shell >/dev/null 2>&1 || true
-
 cat <<EOF
 
-  Done.
+  Done. CLI + shim installed; the plugin itself comes from the store:
 
-  $CLI                      toggle from terminal
-    $CLI status --json       what is on
-    $CLI lid on|off|toggle   keep working with lid closed
-    $CLI lock on|off         lock on lid close (opt-in)
-    $CLI doctor              reconcile toggle vs inhibitor
+    omarchy plugin add https://github.com/tymurbogach/omarchy-sleepwalker.git --enable
 
-  Bar: Small Laptop indicator integrated with Reminder/StayAwake/etc.
-       left of the clock — same size/style as Omarchy's original indicators.
-       Click the  to toggle lid ignore.
-
-  Behavior:
-    lid on  → inhibitor active (handle-lid-switch), closing lid only powers
-               off eDP-1 via clamshell, no suspend, no lock by default.
-    lid off → stock: lid close → suspend-then-hibernate (+ lock if no dock).
+  Bar: Laptop indicator inside the strip (same size/style as the other six).
+       Click toggles lid ignore; dim when off, full when on.
 
   Verify:
-    $CLI lid on && systemd-inhibit --list | grep -i lid
-    # close lid 10s → hyprctl monitors, journalctl -u systemd-logind (no suspend)
+    $CLI lid on && systemd-inhibit --list | grep -i sleepwalker
+    # close lid 10s → panel off, no suspend, no lock (lock opt-in: $CLI lock on)
 EOF

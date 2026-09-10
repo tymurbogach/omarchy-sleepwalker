@@ -5,72 +5,46 @@
 #   omarchy-sleepwalker lock on|off|toggle
 #   omarchy-sleepwalker doctor
 #
-# State:
-#   ~/.local/state/omarchy/toggles/lid-ignore  — presence = Lid Ignore on (legacy, also checked)
-#   ~/.local/state/omarchy/toggles/sleepwalker — presence = Sleepwalker on (preferred)
-#   systemd --user omarchy-sleepwalker-inhibit.service  — holds handle-lid-switch inhibitor
+# State (single source of truth, shared with Service.qml + Laptop indicator):
+#   ~/.local/state/omarchy/toggles/sleepwalker — presence = lid-ignore on (preferred)
+#   ~/.local/state/omarchy/toggles/lid-ignore  — presence = same, legacy (read, migrated away on write)
+#   ~/.local/state/omarchy/toggles/lid-lock    — presence = also lock on lid close (opt-in)
+#
+# The inhibitor itself is held by the plugin's Service.qml as a child
+# `systemd-inhibit … sleep infinity` while the toggle is on — no systemd unit,
+# so `omarchy plugin add` alone is a working install.
 
 set -euo pipefail
 
 SELF=$(basename "$0")
-SERVICE="omarchy-sleepwalker-inhibit.service"
-# legacy lid-ignore kept for migration; new preferred is sleepwalker
-TOGGLE_IGNORE="$HOME/.local/state/omarchy/toggles/sleepwalker"
-TOGGLE_IGNORE_LEGACY="$HOME/.local/state/omarchy/toggles/lid-ignore"
-TOGGLE_LOCK="$HOME/.local/state/omarchy/toggles/lid-lock"
-UNIT_SRC_CANDIDATES=(
-  "$HOME/.config/systemd/user/$SERVICE"
-  "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/systemd/user/$SERVICE"
-  "/usr/share/omarchy-sleepwalker/$SERVICE"
-)
+ID="io.github.tymurbogach.sleepwalker"
+TOGGLES_DIR="$HOME/.local/state/omarchy/toggles"
+TOGGLE_IGNORE="$TOGGLES_DIR/sleepwalker"
+TOGGLE_IGNORE_LEGACY="$TOGGLES_DIR/lid-ignore"
+TOGGLE_LOCK="$TOGGLES_DIR/lid-lock"
+INHIBIT_WHO="Omarchy Sleepwalker"
+LEGACY_UNITS=("omarchy-sleepwalker-inhibit.service" "omarchy-lid-inhibit.service")
 
 fail() { echo "$SELF: $*" >&2; exit 1; }
 
 is_ignore_on() { [[ -f $TOGGLE_IGNORE || -f $TOGGLE_IGNORE_LEGACY ]]; }
 is_lock_on()   { [[ -f $TOGGLE_LOCK ]]; }
 
+# The Service-held inhibitor shows in logind with our --who string.
 is_inhibit_active() {
-  systemctl --user is-active --quiet "$SERVICE" 2>/dev/null
-}
-
-ensure_unit_installed() {
-  # Installed by install.sh to ~/.config/systemd/user; copy if missing (e.g. git add without install)
-  if [[ -f $HOME/.config/systemd/user/$SERVICE ]]; then return 0; fi
-  for c in "${UNIT_SRC_CANDIDATES[@]}"; do
-    if [[ -f $c ]]; then
-      mkdir -p "$HOME/.config/systemd/user"
-      cp -f "$c" "$HOME/.config/systemd/user/$SERVICE"
-      systemctl --user daemon-reload 2>/dev/null || true
-      return 0
-    fi
-  done
-  return 1
-}
-
-enable_inhibit() {
-  ensure_unit_installed || fail "unit $SERVICE not found — run install.sh"
-  if ! systemctl --user is-enabled --quiet "$SERVICE" 2>/dev/null; then
-    systemctl --user enable "$SERVICE" >/dev/null 2>&1 || true
-  fi
-  systemctl --user start "$SERVICE" >/dev/null 2>&1 || true
-}
-
-disable_inhibit() {
-  systemctl --user stop "$SERVICE" >/dev/null 2>&1 || true
+  systemd-inhibit --list 2>/dev/null | grep -qF "$INHIBIT_WHO"
 }
 
 set_lid() {
   local action="$1"
   case "$action" in
     on)
-      mkdir -p "$(dirname "$TOGGLE_IGNORE")"
+      mkdir -p "$TOGGLES_DIR"
       touch "$TOGGLE_IGNORE"
       rm -f "$TOGGLE_IGNORE_LEGACY"
-      enable_inhibit
       ;;
     off)
       rm -f "$TOGGLE_IGNORE" "$TOGGLE_IGNORE_LEGACY"
-      disable_inhibit
       ;;
     toggle|"")
       if is_ignore_on; then set_lid off; else set_lid on; fi
@@ -83,7 +57,7 @@ set_lock() {
   local action="$1"
   case "$action" in
     on)
-      mkdir -p "$(dirname "$TOGGLE_LOCK")"
+      mkdir -p "$TOGGLES_DIR"
       touch "$TOGGLE_LOCK"
       ;;
     off)
@@ -94,6 +68,10 @@ set_lock() {
       ;;
     *) fail "lock: expected on|off|toggle, got '$action'" ;;
   esac
+}
+
+service_loaded() {
+  omarchy-shell shell sleepwalker status >/dev/null 2>&1
 }
 
 cmd_status() {
@@ -125,18 +103,33 @@ cmd_doctor() {
   is_ignore_on && active=true || active=false
   is_inhibit_active && inhibit=true || inhibit=false
   echo "· lid-ignore: $active, inhibit: $inhibit, lock-on-lid: $(is_lock_on && echo on || echo off)"
+
+  # Legacy (<0.2.0) systemd units: the Service owns the inhibitor now.
+  local u leftovers=false
+  for u in "${LEGACY_UNITS[@]}"; do
+    if [[ -f $HOME/.config/systemd/user/$u ]]; then
+      echo "· removing legacy unit $u (Service holds the inhibitor now)"
+      systemctl --user disable --now "$u" >/dev/null 2>&1 || systemctl --user stop "$u" >/dev/null 2>&1 || true
+      rm -f "$HOME/.config/systemd/user/$u"
+      leftovers=true
+    fi
+  done
+  $leftovers && systemctl --user daemon-reload >/dev/null 2>&1 || true
+
   if [[ $active == true && $inhibit == false ]]; then
-    echo "· fixing: enabling $SERVICE"
-    enable_inhibit
+    if service_loaded; then
+      echo "· service is loaded but holds no inhibitor — restarting shell to recover"
+      omarchy-restart-shell >/dev/null 2>&1 || true
+    else
+      echo "· fixing: plugin service not loaded — enabling $ID"
+      omarchy plugin enable "$ID" >/dev/null 2>&1 || echo "· enable it with: omarchy plugin enable $ID" >&2
+    fi
   elif [[ $active == false && $inhibit == true ]]; then
-    echo "· fixing: disabling $SERVICE"
-    disable_inhibit
+    echo "· stray inhibitor with toggle off — it belongs to a dying shell; restarting shell to release it"
+    omarchy-restart-shell >/dev/null 2>&1 || true
   else
     echo "· in sync"
   fi
-  # Ensure wrapper/shim is present if toggles say we need it
-  # (install.sh is the canonical path, doctor just nudges)
-  cmd_status --json >/dev/null
   echo "· ok"
 }
 
@@ -147,7 +140,7 @@ Usage: $SELF <command> [args]
   status [--json]          show lid state
   lid on|off|toggle        inhibit lid suspend (keep working closed)
   lock on|off|toggle       lock on lid close when lid-ignore is on (default off)
-  doctor                   reconcile toggle vs systemd unit
+  doctor                   reconcile toggle vs inhibitor, drop legacy units
 USAGE
 }
 

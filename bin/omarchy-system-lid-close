@@ -1,24 +1,29 @@
 #!/bin/bash
-# omarchy-system-lid-close — shim installed by omarchy-lid
+# omarchy-system-lid-close — shim installed by omarchy-sleepwalker (./install.sh)
 #
 # Hyprland calls `omarchy-system-lid-close` on `switch:on:Lid Switch`
-# (default/hypr/bindings/utilities.lua:34). Stock it locks (+ clamshell).
-# When lid-ignore is on and lock-on-lid is off, we skip the lock but still
-# reconcile displays via omarchy-hyprland-monitor-clamshell.
+# (default/hypr/bindings/utilities.lua:34). Stock locks (unless docked) and
+# reconciles displays via omarchy-hyprland-monitor-clamshell.
+# When Sleepwalker is on and lock-on-lid is off, we skip the lock but still
+# reconcile displays, so closing the lid only powers off the panel.
 #
 # Installed to ~/.local/bin which sorts before /usr/share/omarchy/bin on
 # Omarchy's PATH, so this shadows the stock script without touching /usr.
-# Uninstall removes it.
+# Uninstall (./uninstall.sh) removes it.
 
 set -euo pipefail
 
 REAL="/usr/share/omarchy/bin/omarchy-system-lid-close"
 CLAMSHELL="/usr/share/omarchy/bin/omarchy-hyprland-monitor-clamshell"
-IGNORE_FLAG="$HOME/.local/state/omarchy/toggles/lid-ignore"
-LOCK_FLAG="$HOME/.local/state/omarchy/toggles/lid-lock"
+TOGGLES_DIR="$HOME/.local/state/omarchy/toggles"
+IGNORE_FLAG="$TOGGLES_DIR/sleepwalker"
+IGNORE_FLAG_LEGACY="$TOGGLES_DIR/lid-ignore"
+LOCK_FLAG="$TOGGLES_DIR/lid-lock"
+
+ignoring() { [[ -f $IGNORE_FLAG || -f $IGNORE_FLAG_LEGACY ]]; }
 
 # If not ignoring, delegate 1:1 to stock (lock + clamshell).
-if [[ ! -f $IGNORE_FLAG ]]; then
+if ! ignoring; then
   exec "$REAL" "$@"
 fi
 
