@@ -54,15 +54,15 @@ After an `omarchy update`, refresh the stock indicator copies (Laptop is untouch
 ## Remove
 
 ```sh
+./uninstall.sh
+# or: omarchy-sleepwalker-uninstall
 omarchy plugin remove io.github.tymurbogach.sleepwalker
 ```
 
-The built-in indicators strip is restored in place automatically. If you ran `./install.sh`, also remove the CLI + shim + toggles:
-
-```sh
-./uninstall.sh
-# or: omarchy-sleepwalker-uninstall
-```
+In this order: the uninstaller takes Laptop out of the strip first, so the
+restored built-in comes back clean. (`plugin remove` alone also works — the
+built-in is restored in place automatically — then run the uninstaller for
+the CLI + shim + toggles.)
 
 ## How it works
 
