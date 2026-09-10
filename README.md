@@ -1,48 +1,60 @@
 # Omarchy Sleepwalker
 
-Keep working with the lid closed — a Laptop indicator inside Omarchy's own indicator strip.
+Close your laptop and keep working. One click, no suspend, no lock.
 
-> **Placement:** the indicators strip left of the clock (🎙️ ● ⚓ … ☕). After install, Sleepwalker is the **7th icon**, same 21px slot and dim-when-off (0.45) behaviour as the other six. Click it to toggle.
+![Sleepwalker indicator (boxed) in the Omarchy bar](preview.png)
+
+## What it does
+
+Laptops suspend when you close the lid. Sleepwalker adds a **Laptop indicator** to Omarchy's bar: click it and closing the lid only powers off the panel — downloads, builds, servers and SSH sessions keep running. Click again and you're back to stock.
+
+| Lid closed, Sleepwalker… | Result |
+|---|---|
+| **ON** | Panel off. No suspend, no hibernate, no lock. Keeps working. |
+| **OFF** (stock) | Suspend-then-hibernate (+ lock unless docked). |
+| **ON + lock** (`lock on`) | Panel off + locked. Still no suspend. |
+
+## Looks stock, because it is the strip
+
+No separate widget, no oversized icon. Sleepwalker **is** Omarchy's indicator strip with a 7th entry — same size, same dim-when-off, same hover-reveal as the other six:
+
+**ON** — bright, next to the clock:
+
+![Laptop indicator on](docs/bar-on.png)
+
+**OFF** — dimmed among the rest (inactive indicators hide until hover, like stock):
+
+![Laptop indicator off, dimmed with the other indicators](docs/bar-off.png)
 
 ## Install
 
 ```sh
 omarchy plugin add https://github.com/tymurbogach/omarchy-sleepwalker.git --enable
-```
-
-That alone stages the strip (it inherits your current indicator list). Then run:
-
-```sh
 ./install.sh
 ```
 
-It adds the Laptop icon to the strip, puts the CLI on `PATH`, and installs the lid-close shim for the no-lock behaviour. Everything lands inside `$HOME` — no sudo, no `/usr` writes, no systemd units. The inhibitor is held by the plugin's own service while the toggle is on.
+| Step | What you get |
+|---|---|
+| `plugin add` | The indicator strip with Laptop (inherits your indicator list). |
+| `install.sh` | Adds Laptop to the strip, puts the CLI on `PATH`, installs the lid-close shim for the no-lock behaviour. Everything inside `$HOME` — no sudo, no services. |
 
-## Usage
+The inhibitor is held by the plugin's own service while the toggle is on; disabling or removing the plugin releases it.
 
-Click the  indicator to turn lid-ignore on/off. Right side of the behaviour:
+## Use
 
-- **Lid off (stock):** close lid → suspend-then-hibernate (+ lock unless docked).
-- **Lid on (this plugin):** close lid → only powers off the panel, **no suspend, no lock** by default. The machine keeps working. Optional lock: `omarchy-sleepwalker lock on`.
-
-Terminal:
+Click the  indicator, or from the terminal:
 
 ```sh
-omarchy-sleepwalker status              # human readable
+omarchy-sleepwalker lid on|off|toggle   # keep working with lid closed
+omarchy-sleepwalker lock on|off         # also lock on close (default off)
 omarchy-sleepwalker status --json       # {"active":true,"inhibitActive":true,"lockOnLid":false}
-omarchy-sleepwalker lid on|off|toggle
-omarchy-sleepwalker lock on|off|toggle
 omarchy-sleepwalker doctor              # reconcile toggle vs inhibitor
-omarchy-sleepwalker lid on && systemd-inhibit --list | grep -i sleepwalker
 ```
 
-## Configure
-
-The strip is Omarchy's indicators widget, so the standard bar commands apply:
+Configure like any indicators strip:
 
 ```sh
 omarchy bar set io.github.tymurbogach.sleepwalker items '["Dictation","Laptop","StayAwake"]' --json
-omarchy bar move io.github.tymurbogach.sleepwalker --section center --index 0
 ```
 
 After an `omarchy update`, refresh the stock indicator copies (Laptop is untouched):
@@ -55,22 +67,18 @@ After an `omarchy update`, refresh the stock indicator copies (Laptop is untouch
 
 ```sh
 ./uninstall.sh
-# or: omarchy-sleepwalker-uninstall
 omarchy plugin remove io.github.tymurbogach.sleepwalker
 ```
 
-In this order: the uninstaller takes Laptop out of the strip first, so the
-restored built-in comes back clean. (`plugin remove` alone also works — the
-built-in is restored in place automatically — then run the uninstaller for
-the CLI + shim + toggles.)
+In this order the restored built-in strip comes back clean. Lid close returns to stock suspend.
 
 ## How it works
 
-- **Indicator:** `indicators/Laptop.qml`, a `BarIndicator` like the stock six. It binds reactively to the plugin's `Service.qml` (`lidOn`) — no polling, same size/style/hover-reveal as the rest of the strip.
-- **Inhibitor:** `Service.qml` holds `systemd-inhibit --what=handle-lid-switch … sleep infinity` exactly while the toggle is on. Disabling or removing the plugin releases it.
-- **No lock:** Hyprland runs `omarchy-system-lid-close` on lid close. `./install.sh` places a shim earlier on `PATH` (`~/.local/bin`) that, with lid-ignore on and lock off, only reconciles displays instead of locking. Without the shim, stock behaviour applies (lock, then whatever the inhibitor allows).
-- **State:** `~/.local/state/omarchy/toggles/sleepwalker` (on = file exists) and `lid-lock` (opt-in lock). The CLI, the service and the indicator all read the same files, so terminal and bar always agree.
-- **Privileges:** none beyond the user session. No sudo, no setuid, no second Quickshell process, no writes outside `$HOME`.
+- **Indicator** (`indicators/Laptop.qml`): a native `BarIndicator` bound reactively to the plugin service. No polling.
+- **Inhibitor** (`Service.qml`): holds `systemd-inhibit --what=handle-lid-switch` exactly while the toggle is on.
+- **No lock**: `./install.sh` places a shim earlier on `PATH` (`~/.local/bin/omarchy-system-lid-close`) that only reconciles displays instead of locking. Without it, stock lock applies.
+- **State**: `~/.local/state/omarchy/toggles/sleepwalker` (on = file exists) and `lid-lock` (opt-in). CLI, service and indicator read the same files.
+- **Privileges**: user session only. No sudo, no setuid, no second shell process, nothing outside `$HOME`.
 
 ## License
 
