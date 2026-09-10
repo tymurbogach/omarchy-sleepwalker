@@ -23,6 +23,7 @@ OLD_CLI="omarchy-lid"
 LEGACY_UNITS=("omarchy-sleepwalker-inhibit.service" "omarchy-lid-inhibit.service")
 
 command -v omarchy >/dev/null || { echo "this needs Omarchy" >&2; exit 1; }
+command -v jq >/dev/null || echo "warning: jq not found — Laptop icon and layout migration will be skipped" >&2
 
 PLUGINS_DIR="$HOME/.config/omarchy/plugins"
 BIN_DIR="$HOME/.local/bin"
@@ -37,6 +38,7 @@ sync_stock() {
   local src_widget="$OMARCHY_SRC/shell/plugins/bar/widgets/Indicators.qml"
   local src_ind="$OMARCHY_SRC/shell/plugins/bar/indicators"
   [[ -f $src_widget && -d $src_ind ]] || { echo "cannot find Omarchy's indicators source" >&2; exit 1; }
+  command -v perl >/dev/null || { echo "sync-stock needs perl" >&2; exit 1; }
 
   case "$(cat "$src_widget")" in
     *'Qt.resolvedUrl("../indicators/"'*) ;;
@@ -60,7 +62,7 @@ sync_stock() {
       '//      only logged a handler-collision warning on every load.' \
       ''
     sed -e 's|Qt\.resolvedUrl("\.\./indicators/"|Qt.resolvedUrl("indicators/"|' \
-        -e 's|defaultIndicatorEntries: \[ "Dictation", "ScreenRecording", "Reminder", "NightLight", "Dnd", "StayAwake" \]|defaultIndicatorEntries: [ "Dictation", "ScreenRecording", "Reminder", "NightLight", "Dnd", "StayAwake", "Laptop" ]|' \
+        -e 's|\(defaultIndicatorEntries: \[[^]]*[^ ]\) *\]|\1, "Laptop" ]|' \
         "$src_widget" \
     | perl -0777 -pe 's/  IpcHandler \{\n    target: "omarchy\.indicators"\n\n    function refresh\(\): void \{\n      root\.broadcast\("refresh"\)\n    \}\n  \}\n\n/  \/\/ (Stock IpcHandler removed — see header patch 3.)\n\n/'
   } > "$HERE/Indicators.qml"
@@ -170,11 +172,16 @@ else
 fi
 
 echo
-"$BIN_DIR/$CLI" doctor || true
+doc_out=$("$BIN_DIR/$CLI" doctor || true)
+echo "$doc_out"
 
 # Rescan reloads QML, but only a shell restart rebuilds the bar from the new
-# layout — without it the strip keeps rendering the previous widget.
-omarchy-restart-shell >/dev/null 2>&1 || true
+# layout — without it the strip keeps rendering the previous widget. The
+# doctor above already restarts in its recovery branches; don't do it twice.
+case "$doc_out" in
+  *restarting*) ;;
+  *) omarchy-restart-shell >/dev/null 2>&1 || true ;;
+esac
 
 cat <<EOF
 

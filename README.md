@@ -74,7 +74,7 @@ In this order the restored built-in strip comes back clean. Lid close returns to
 
 ## How it works
 
-- **Indicator** (`indicators/Laptop.qml`): a native `BarIndicator` bound reactively to the plugin service. No polling.
+- **Indicator** (`indicators/Laptop.qml`): a native `BarIndicator` bound reactively to the plugin service. No polling. The six sibling files are verbatim copies of Omarchy's stock indicators — don't edit them by hand, refresh with `./install.sh --sync-stock`.
 - **Inhibitor** (`Service.qml`): holds `systemd-inhibit --what=handle-lid-switch` exactly while the toggle is on.
 - **No lock**: `./install.sh` places a shim earlier on `PATH` (`~/.local/bin/omarchy-system-lid-close`) that only reconciles displays instead of locking. Without it, stock lock applies.
 - **State**: `~/.local/state/omarchy/toggles/sleepwalker` (on = file exists) and `lid-lock` (opt-in). CLI, service and indicator read the same files.

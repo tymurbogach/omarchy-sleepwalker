@@ -71,7 +71,9 @@ set_lock() {
 }
 
 service_loaded() {
-  omarchy-shell shell sleepwalker status >/dev/null 2>&1
+  # NOTE: `omarchy shell <target> <method>` is the routed form; the bare
+  # `omarchy-shell shell …` variant answers "Function not found" for targets.
+  omarchy shell sleepwalker status 2>/dev/null | grep -q '"active"'
 }
 
 cmd_status() {
