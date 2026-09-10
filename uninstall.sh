@@ -69,13 +69,14 @@ if command -v jq >/dev/null 2>&1 && [[ -f "$HOME/.config/omarchy/shell.json" ]];
 fi
 
 # Removing the plugin restores the built-in strip with a copy of OUR entry —
-# including "Laptop" in items, which the built-in cannot load. Take it out.
+# including "Laptop" in items, which the built-in cannot load. Take it out of
+# both ids so this works whether it runs before or after `plugin remove`.
 if command -v jq >/dev/null 2>&1 && [[ -f "$HOME/.config/omarchy/shell.json" ]]; then
   tmp=$(mktemp)
-  jq '
+  jq --arg id "$ID" '
     .bar.layout |= with_entries(
       .value |= (map(
-        if type == "object" and (.id // "") == "omarchy.indicators"
+        if type == "object" and ((.id // "") == "omarchy.indicators" or (.id // "") == $id)
            and (.items | type) == "array"
         then .items |= map(select(. != "Laptop")) else . end
       ) // .)
