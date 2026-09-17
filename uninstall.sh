@@ -71,6 +71,11 @@ for d in "$PLUGINS_DIR"/*.indicators; do
   fi
 done
 
+# Layout change detection (same as install.sh): restart only if the strip
+# actually changed; re-runs leave the running shell untouched like stock.
+layout_sum_before=""
+[[ -f "$HOME/.config/omarchy/shell.json" ]] && layout_sum_before=$(md5sum "$HOME/.config/omarchy/shell.json" | cut -d' ' -f1)
+
 # Legacy (<0.2.0) separate-widget slots under either id.
 if command -v jq >/dev/null 2>&1 && [[ -f "$HOME/.config/omarchy/shell.json" ]]; then
   for section in left center right; do
@@ -81,7 +86,7 @@ if command -v jq >/dev/null 2>&1 && [[ -f "$HOME/.config/omarchy/shell.json" ]];
         | select($eid != $old and ($eid != $id or (type == "object" and has("items"))))
       ) // .)' \
       "$HOME/.config/omarchy/shell.json" > "$tmp" 2>/dev/null \
-      && mv "$tmp" "$HOME/.config/omarchy/shell.json" || rm -f "$tmp"
+      && { if cmp -s "$tmp" "$HOME/.config/omarchy/shell.json"; then rm -f "$tmp"; else mv "$tmp" "$HOME/.config/omarchy/shell.json"; fi; } || rm -f "$tmp"
   done
 fi
 
@@ -99,13 +104,28 @@ if command -v jq >/dev/null 2>&1 && [[ -f "$HOME/.config/omarchy/shell.json" ]];
       ) // .)
     )' \
     "$HOME/.config/omarchy/shell.json" > "$tmp" 2>/dev/null \
-    && mv "$tmp" "$HOME/.config/omarchy/shell.json" || rm -f "$tmp"
+    && { if cmp -s "$tmp" "$HOME/.config/omarchy/shell.json"; then rm -f "$tmp"; else mv "$tmp" "$HOME/.config/omarchy/shell.json"; fi; } || rm -f "$tmp"
 fi
 
-omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
+# No rescanPlugins here: stock `plugin remove` already rescanned, and the
+# conditional restart below supersedes a second storm.
 
-# Same as install: only a restart rebuilds the bar from the edited layout.
-omarchy-restart-shell >/dev/null 2>&1 || true
+# Same as install: only a restart rebuilds the bar from the edited layout —
+# and only when the layout actually changed.
+layout_changed=false
+if [[ -f "$HOME/.config/omarchy/shell.json" ]]; then
+  if [[ -n $layout_sum_before ]]; then
+    [[ $(md5sum "$HOME/.config/omarchy/shell.json" | cut -d' ' -f1) != "$layout_sum_before" ]] && layout_changed=true
+  else
+    layout_changed=true
+  fi
+fi
+if $layout_changed; then
+  echo "· layout changed — restarting shell once to rebuild the strip"
+  omarchy-restart-shell >/dev/null 2>&1 || true
+else
+  echo "· layout unchanged — shell untouched"
+fi
 
 cat <<EOF
   Removed (CLI, shim, toggles, legacy).

@@ -112,6 +112,12 @@ for d in "$PLUGINS_DIR"/*.indicators; do
   fi
 done
 
+# Layout change detection: only a shell restart rebuilds the strip from the
+# new layout (verified: rescanPlugins alone leaves the old strip rendering).
+# Re-runs with nothing to change touch neither rescan nor restart.
+layout_sum_before=""
+[[ -f $HOME/.config/omarchy/shell.json ]] && layout_sum_before=$(md5sum "$HOME/.config/omarchy/shell.json" | cut -d' ' -f1)
+
 # Legacy separate-widget slot: <0.2.0 staged a big BarIconButton beside the
 # strip. The new model has no such widget; any layout entry with our id that
 # carries no `items` is that stale slot. (Entries WITH items are the new
@@ -125,7 +131,7 @@ if command -v jq >/dev/null 2>&1 && [[ -f $HOME/.config/omarchy/shell.json ]]; t
         | select($eid != $old and ($eid != $id or (type == "object" and has("items"))))
       ) // .)' \
       "$HOME/.config/omarchy/shell.json" > "$tmp" 2>/dev/null \
-      && mv "$tmp" "$HOME/.config/omarchy/shell.json" || rm -f "$tmp"
+      && { if cmp -s "$tmp" "$HOME/.config/omarchy/shell.json"; then rm -f "$tmp"; else mv "$tmp" "$HOME/.config/omarchy/shell.json"; fi; } || rm -f "$tmp"
   done
 fi
 
@@ -242,26 +248,44 @@ if plugin_added; then
         ) // .)
       )' \
       "$HOME/.config/omarchy/shell.json" > "$tmp" 2>/dev/null \
-      && mv "$tmp" "$HOME/.config/omarchy/shell.json" || rm -f "$tmp"
+      && { if cmp -s "$tmp" "$HOME/.config/omarchy/shell.json"; then rm -f "$tmp"; else mv "$tmp" "$HOME/.config/omarchy/shell.json"; fi; } || rm -f "$tmp"
   else
     echo "warning: jq or shell.json missing — skipping Laptop/layout ensure (install jq and re-run)" >&2
   fi
-  omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
+  # `plugin add/enable` already rescanned; a restart (below) supersedes
+  # rescanPlugins, so don't fire both storms.
 else
   echo "· plugin not added yet — finish with:"
   echo "    omarchy plugin add https://github.com/tymurbogach/omarchy-sleepwalker.git --enable --yes"
+fi
+
+layout_changed=false
+if [[ -f $HOME/.config/omarchy/shell.json ]]; then
+  if [[ -n $layout_sum_before ]]; then
+    [[ $(md5sum "$HOME/.config/omarchy/shell.json" | cut -d' ' -f1) != "$layout_sum_before" ]] && layout_changed=true
+  else
+    layout_changed=true
+  fi
 fi
 
 echo
 doc_out=$("$BIN_DIR/$CLI" doctor || true)
 echo "$doc_out"
 
-# Rescan reloads QML, but only a shell restart rebuilds the bar from the new
-# layout — without it the strip keeps rendering the previous widget. The
-# doctor above already restarts in its recovery branches; don't do it twice.
+# Only a shell restart rebuilds the strip from a changed layout
+# (screenshot-verified: rescanPlugins alone leaves the old strip rendering).
+# Restart at most once per run, and never on a no-op re-run: like stock
+# plugin ops, those leave the running shell untouched.
 case "$doc_out" in
   *restarting*) ;;
-  *) omarchy-restart-shell >/dev/null 2>&1 || true ;;
+  *)
+    if $layout_changed; then
+      echo "· layout changed — restarting shell once to rebuild the strip"
+      omarchy-restart-shell >/dev/null 2>&1 || true
+    else
+      echo "· layout unchanged — shell untouched ( restart it yourself if the bar looks stale: omarchy-restart-shell )"
+    fi
+    ;;
 esac
 
 cat <<EOF
