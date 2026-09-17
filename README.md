@@ -36,7 +36,7 @@ omarchy plugin add https://github.com/tymurbogach/omarchy-sleepwalker.git --enab
 | Step | What you get |
 |---|---|
 | `plugin add` | The indicator strip with Laptop (inherits your indicator list). |
-| `install.sh` | Adds Laptop to the strip, puts the CLI on `PATH`, installs the lid-close shim for the no-lock behaviour. Everything inside `$HOME` — no sudo, no services. |
+| `install.sh` | Adds Laptop to the strip, puts the CLI on `PATH`, installs the lid-close shim, and pins the lid binding to the shim by absolute path (bare names resolve by `PATH`, and systemd-unit contexts would run stock and lock). Everything inside `$HOME` — no sudo, no services. |
 
 The inhibitor is held by the plugin's own service while the toggle is on; disabling or removing the plugin releases it.
 

@@ -36,6 +36,15 @@ if [[ -f $SHIM ]]; then
   if ours "$SHIM"; then rm -f "$SHIM"; else echo "  leaving foreign $SHIM alone" >&2; fi
 fi
 
+echo "· removing lid binding override (stock binding takes over again)"
+BINDINGS="$HOME/.config/hypr/bindings.lua"
+if [[ -f $BINDINGS ]] && grep -q "^-- BEGIN omarchy-sleepwalker" "$BINDINGS"; then
+  cp -f "$BINDINGS" "$BINDINGS.bak.$(date +%s)"
+  sed -i "/^-- BEGIN omarchy-sleepwalker/,/^-- END omarchy-sleepwalker$/d" "$BINDINGS"
+  sed -i -e :a -e '/./!{$d;N;ba' -e '}' "$BINDINGS"
+  echo "  lid binding override removed"
+fi
+
 echo "· removing legacy post-update hook"
 rm -f "$HOME/.config/omarchy/hooks/post-update.d/sleepwalker"
 

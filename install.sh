@@ -3,10 +3,12 @@
 #
 # The plugin itself needs no install step: `omarchy plugin add <repo> --enable`
 # is a working install (indicator + inhibitor, straight from the store).
-# This script only does the two things the store cannot:
+# This script only does the three things the store cannot:
 #   1. puts the CLI on PATH (~/.local/bin) for terminal use
 #   2. installs the lid-close shim (~/.local/bin/omarchy-system-lid-close)
 #      so a closed lid powers off the panel WITHOUT locking (stock locks)
+#   3. pins the lid-close binding to the shim by absolute path
+#      (PATH order differs per exec context; systemd units would run stock)
 #
 # Everything is written inside $HOME. No sudo, no /usr, no services.
 #
@@ -144,6 +146,39 @@ install -m 755 "$HERE/uninstall.sh" "$BIN_DIR/${CLI}-uninstall"
 
 echo "· lid-close shim (closed lid: screen off, no lock, no suspend)"
 install -m 755 "$HERE/bin/omarchy-system-lid-close" "$BIN_DIR/omarchy-system-lid-close"
+
+# --- pin lid-close to the shim by absolute path -----------------------------
+# The stock binding runs a bare `omarchy-system-lid-close`, which resolves by
+# PATH. PATH order differs per context: systemd units put
+# /usr/share/omarchy/bin first, so the stock script can win over our shim and
+# lock the session despite the toggle. An absolute path wins everywhere.
+# Managed block in the user's bindings.lua: ours to refresh, theirs to keep.
+pin_lid_binding() {
+  local bindings="$HOME/.config/hypr/bindings.lua"
+  local begin="-- BEGIN omarchy-sleepwalker (managed by install.sh - do not edit)"
+  local end="-- END omarchy-sleepwalker"
+  mkdir -p "$(dirname "$bindings")"
+  [[ -f $bindings ]] || : > "$bindings"
+  if grep -q "omarchy-sleepwalker" "$bindings"; then
+    cp -f "$bindings" "$bindings.bak.$(date +%s)"
+  fi
+  sed -i "/^-- BEGIN omarchy-sleepwalker/,/^-- END omarchy-sleepwalker$/d" "$bindings"
+  # Strip blank lines left at EOF so re-runs don't stack separators.
+  sed -i -e :a -e '/./!{$d;N;ba' -e '}' "$bindings"
+  [[ -s $bindings ]] && printf '\n' >> "$bindings"
+  cat >> "$bindings" <<EOF
+$begin
+-- Absolute path on purpose: bare names resolve by PATH, and systemd-unit
+-- contexts order /usr/share/omarchy/bin before ~/.local/bin (stock would win).
+hl.unbind("switch:on:Lid Switch")
+o.bind("switch:on:Lid Switch", nil, "$BIN_DIR/omarchy-system-lid-close", { locked = true })
+$end
+EOF
+  echo "· lid binding pinned to $BIN_DIR/omarchy-system-lid-close"
+}
+
+echo "· lid binding override (absolute path beats PATH shadowing)"
+pin_lid_binding
 
 # --- enable (in-place replace of the built-in strip, settings preserved) ---
 

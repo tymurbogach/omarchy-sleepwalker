@@ -86,6 +86,14 @@ units, pre-0.2.0 derived-clone plugin folders and pre-0.2.0 separate
 bar-widget layout entries. When you change install or uninstall, keep this
 migration path. Real installs still hit it, so do not assume a clean slate.
 
+`install.sh` also pins `switch:on:Lid Switch` to the shim by absolute path
+in a marked block in `~/.config/hypr/bindings.lua`, and `uninstall.sh`
+removes exactly that block. The pin exists because bare command names resolve
+by `PATH`, and systemd-unit exec contexts order `/usr/share/omarchy/bin`
+before `~/.local/bin`: without it the stock lid-close script can win and lock
+the session despite the toggle. Never touch outside the marked block; manual
+user edits elsewhere in the file always survive install and uninstall.
+
 ## Conventions
 
 - Everything (code, docs, commits) is English.
