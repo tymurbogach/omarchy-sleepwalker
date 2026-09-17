@@ -1,6 +1,6 @@
 # Omarchy Sleepwalker
 
-Close your laptop and keep working. One click, no suspend, no lock.
+Close your laptop and keep working. One click, no suspend, lock optional.
 
 ![Sleepwalker indicator (boxed) in the Omarchy bar](preview.png)
 
@@ -46,10 +46,14 @@ Click the  indicator, or from the terminal:
 
 ```sh
 omarchy-sleepwalker lid on|off|toggle   # keep working with lid closed
-omarchy-sleepwalker lock on|off         # also lock on close (default off)
+omarchy-sleepwalker lock on|off|toggle  # also lock on close (default off)
 omarchy-sleepwalker status --json       # {"active":true,"inhibitActive":true,"lockOnLid":false}
 omarchy-sleepwalker doctor              # reconcile toggle vs inhibitor
 ```
+
+`lock` is opt-in and off by default; with `lock on` the lid still never
+suspends. Stock idle keeps counting with the lid closed (screensaver at
+150 s, lock at 600 s) — that is Omarchy behavior, not controlled here.
 
 Configure like any indicators strip:
 
@@ -76,7 +80,7 @@ In this order the restored built-in strip comes back clean. Lid close returns to
 
 - **Indicator** (`indicators/Laptop.qml`): a native `BarIndicator` bound reactively to the plugin service. No polling. The six sibling files are verbatim copies of Omarchy's stock indicators — don't edit them by hand, refresh with `./install.sh --sync-stock`.
 - **Inhibitor** (`Service.qml`): holds `systemd-inhibit --what=handle-lid-switch` exactly while the toggle is on.
-- **No lock**: `./install.sh` places a shim earlier on `PATH` (`~/.local/bin/omarchy-system-lid-close`) that only reconciles displays instead of locking. Without it, stock lock applies.
+- **No lock**: `./install.sh` places a shim earlier on `PATH` (`~/.local/bin/omarchy-system-lid-close`) that only reconciles displays instead of locking, and pins the lid binding to it by absolute path (systemd-unit contexts resolve stock first by `PATH`). Without either, stock lock applies.
 - **State**: `~/.local/state/omarchy/toggles/sleepwalker` (on = file exists) and `lid-lock` (opt-in). CLI, service and indicator read the same files.
 - **Privileges**: user session only. No sudo, no setuid, no second shell process, nothing outside `$HOME`.
 
