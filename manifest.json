@@ -5,7 +5,7 @@
   "version": "0.3.0",
   "author": "tymurbogach",
   "license": "MIT",
-  "description": "Keep working with the lid closed — Laptop indicator with lid inhibit, no lock.",
+  "description": "Lid control, fully integrated: keep working, no suspend, lock optional.",
   "kinds": [
     "bar-widget",
     "service"
