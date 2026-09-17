@@ -29,9 +29,13 @@ No separate widget, no oversized icon. Sleepwalker **is** Omarchy's indicator st
 ## Install
 
 ```sh
-omarchy plugin add https://github.com/tymurbogach/omarchy-sleepwalker.git --enable
+omarchy plugin add https://github.com/tymurbogach/omarchy-sleepwalker.git --enable --yes
 ./install.sh
 ```
+
+Always install with `--yes`: the entry inherits the stock strip slot, and
+the section question would displace it. The installer integrates, never
+moves: it only ensures `Laptop` is in the strip's items, wherever it sits.
 
 | Step | What you get |
 |---|---|
