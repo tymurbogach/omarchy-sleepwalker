@@ -315,6 +315,19 @@ if [[ -f $HOME/.config/omarchy/shell.json ]]; then
   fi
 fi
 
+# Code-change detection: QML only (re)loads on restart — keepLoaded services
+# survive rescan — so a code update with an unchanged layout would leave
+# stale code running with no restart to pick it up. Stamp the hash of the
+# INSTALLED plugin dir (what the shell actually loads, not this repo);
+# mismatch means the store refreshed the code since our last run.
+STAMP_DIR="$HOME/.local/state/omarchy/sleepwalker"
+STAMP_FILE="$STAMP_DIR/installed-code.md5"
+code_changed=true
+if $MD5_OK && [[ -d $PLUGINS_DIR/$ID ]]; then
+  installed_hash=$(md5sum "$PLUGINS_DIR/$ID/manifest.json" "$PLUGINS_DIR/$ID/Indicators.qml" "$PLUGINS_DIR/$ID/Service.qml" "$PLUGINS_DIR/$ID"/indicators/*.qml 2>/dev/null | md5sum | cut -d' ' -f1 || true)
+  [[ -f $STAMP_FILE ]] && [[ $installed_hash == "$(cat "$STAMP_FILE" 2>/dev/null)" ]] && code_changed=false
+fi
+
 echo
 doc_out=$("$BIN_DIR/$CLI" doctor || true)
 echo "$doc_out"
@@ -329,11 +342,20 @@ case "$doc_out" in
     if $layout_changed; then
       echo "· layout changed — restarting shell once to rebuild the strip"
       omarchy-restart-shell >/dev/null 2>&1 || true
+    elif $code_changed; then
+      echo "· plugin code changed — restarting shell once to reload it"
+      omarchy-restart-shell >/dev/null 2>&1 || true
     else
-      echo "· layout unchanged — shell untouched ( restart it yourself if the bar looks stale: omarchy-restart-shell )"
+      echo "· layout and code unchanged — shell untouched ( restart it yourself if the bar looks stale: omarchy-restart-shell )"
     fi
     ;;
 esac
+
+# Stamp after the decision so a failed run retries the restart next time.
+if $MD5_OK && [[ -d $PLUGINS_DIR/$ID ]]; then
+  mkdir -p "$STAMP_DIR" 2>/dev/null || true
+  md5sum "$PLUGINS_DIR/$ID/manifest.json" "$PLUGINS_DIR/$ID/Indicators.qml" "$PLUGINS_DIR/$ID/Service.qml" "$PLUGINS_DIR/$ID"/indicators/*.qml 2>/dev/null | md5sum | cut -d' ' -f1 > "$STAMP_FILE" 2>/dev/null || true
+fi
 
 cat <<EOF
 

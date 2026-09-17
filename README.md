@@ -40,7 +40,7 @@ moves: it only ensures `Laptop` is in the strip's items, wherever it sits.
 | Step | What you get |
 |---|---|
 | `plugin add` | The indicator strip with Laptop (inherits your indicator list). |
-| `install.sh` | Adds Laptop to the strip, puts the CLI on `PATH`, installs the lid-close shim, and pins the lid binding to the shim by absolute path (bare names resolve by `PATH`, and systemd-unit contexts would run stock and lock). Restarts the shell once if the layout changed, so a first load always rebuilds; never on a no-op re-run. Everything inside `$HOME` — no sudo, no services. |
+| `install.sh` | Adds Laptop to the strip, puts the CLI on `PATH`, installs the lid-close shim, and pins the lid binding to the shim by absolute path (bare names resolve by `PATH`, and systemd-unit contexts would run stock and lock). Restarts the shell once if the layout or the plugin code changed (QML only reloads on restart), never on a no-op re-run. Everything inside `$HOME` — no sudo, no services. |
 
 The inhibitor is held by the plugin's own service while the toggle is on; disabling or removing the plugin releases it. If the shell crashes while on, the orphaned handle (PPID 1) survives: `lid off`, `doctor` and `uninstall.sh` reap it (see SPEC.md).
 

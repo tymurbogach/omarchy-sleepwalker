@@ -93,6 +93,7 @@ rm -f "$HOME/.config/omarchy/hooks/post-update.d/sleepwalker"
 echo "· clearing toggles (off = gone)"
 rm -f "$HOME/.local/state/omarchy/toggles/sleepwalker" "$HOME/.local/state/omarchy/toggles/lid-ignore"
 rm -f "$HOME/.local/state/omarchy/toggles/lid-lock"
+rm -rf "$HOME/.local/state/omarchy/sleepwalker" 2>/dev/null || true
 
 # Reap crash-orphaned inhibitors (PPID 1): nothing should be held now, and a
 # restart alone never kills them. Match our --who string ([r] trick so the
