@@ -192,8 +192,8 @@ if omarchy plugin list --json 2>/dev/null | jq -e --arg id "$ID" 'any(.[]; .id =
     jq --arg id "$ID" '
       .bar.layout |= with_entries(
         .value |= (map(
-          if type == "object" and (.id // "") == $id
-             and (.items | type) == "array" and (index("Laptop") | not)
+           if type == "object" and (.id // "") == $id
+              and (.items | type) == "array" and ((.items | index("Laptop")) | not)
           then .items += ["Laptop"] else . end
         ) // .)
       )' \
