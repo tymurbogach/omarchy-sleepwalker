@@ -2,7 +2,7 @@
 
 Close your laptop and keep working. One click, no suspend, lock optional.
 
-![Sleepwalker indicator (boxed) in the Omarchy bar](preview.png)
+![Sleepwalker: close the lid and keep working, with the native Laptop indicator in the Omarchy bar](preview.png)
 
 ## What it does
 
