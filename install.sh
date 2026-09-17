@@ -159,14 +159,14 @@ pin_lid_binding() {
   local end="-- END omarchy-sleepwalker"
   mkdir -p "$(dirname "$bindings")"
   [[ -f $bindings ]] || : > "$bindings"
-  if grep -q "omarchy-sleepwalker" "$bindings"; then
-    cp -f "$bindings" "$bindings.bak.$(date +%s)"
-  fi
-  sed -i "/^-- BEGIN omarchy-sleepwalker/,/^-- END omarchy-sleepwalker$/d" "$bindings"
+  local tmp
+  tmp=$(mktemp)
+  cp -f "$bindings" "$tmp"
+  sed -i "/^-- BEGIN omarchy-sleepwalker/,/^-- END omarchy-sleepwalker$/d" "$tmp"
   # Strip blank lines left at EOF so re-runs don't stack separators.
-  sed -i -e :a -e '/./!{$d;N;ba' -e '}' "$bindings"
-  [[ -s $bindings ]] && printf '\n' >> "$bindings"
-  cat >> "$bindings" <<EOF
+  sed -i -e :a -e '/./!{$d;N;ba' -e '}' "$tmp"
+  [[ -s $tmp ]] && printf '\n' >> "$tmp"
+  cat >> "$tmp" <<EOF
 $begin
 -- Absolute path on purpose: bare names resolve by PATH, and systemd-unit
 -- contexts order /usr/share/omarchy/bin before ~/.local/bin (stock would win).
@@ -174,7 +174,14 @@ hl.unbind("switch:on:Lid Switch")
 o.bind("switch:on:Lid Switch", nil, "$BIN_DIR/omarchy-system-lid-close", { locked = true })
 $end
 EOF
-  echo "· lid binding pinned to $BIN_DIR/omarchy-system-lid-close"
+  if cmp -s "$bindings" "$tmp"; then
+    rm -f "$tmp"
+    echo "· lid binding already pinned"
+  else
+    cp -f "$bindings" "$bindings.bak.$(date +%s)"
+    mv "$tmp" "$bindings"
+    echo "· lid binding pinned to $BIN_DIR/omarchy-system-lid-close"
+  fi
 }
 
 echo "· lid binding override (absolute path beats PATH shadowing)"
@@ -185,16 +192,22 @@ pin_lid_binding
 if omarchy plugin list --json 2>/dev/null | jq -e --arg id "$ID" 'any(.[]; .id == $id)' >/dev/null; then
   omarchy plugin enable "$ID" >/dev/null 2>&1 || true
   # The enable replaces the built-in strip in place and inherits its explicit
-  # `items` — which predate Laptop. Append it once so the icon actually shows.
+  # `items` — which predate Laptop. Ensure it once so the icon actually shows.
   # (No `items` key at all means "defaults", which already include Laptop.)
+  # Principle: integrate, never move. This only touches our entry's `items`,
+  # wherever it sits; it never reorders or relocates layout entries. Install
+  # with --yes so the section question never displaces the inherited slot.
+  # The filter also collapses duplicates from pre-0.3.1 installers, keeping
+  # first-occurrence order (never `unique`: it would reshuffle the icons).
   if command -v jq >/dev/null 2>&1 && [[ -f $HOME/.config/omarchy/shell.json ]]; then
     tmp=$(mktemp)
     jq --arg id "$ID" '
       .bar.layout |= with_entries(
         .value |= (map(
-           if type == "object" and (.id // "") == $id
-              and (.items | type) == "array" and ((.items | index("Laptop")) | not)
-          then .items += ["Laptop"] else . end
+           if type == "object" and (.id // "") == $id and (.items | type) == "array"
+           then .items |= (reduce .[] as $x ([]; if index($x) then . else . + [$x] end)
+                           | if index("Laptop") then . else . + ["Laptop"] end)
+           else . end
         ) // .)
       )' \
       "$HOME/.config/omarchy/shell.json" > "$tmp" 2>/dev/null \
