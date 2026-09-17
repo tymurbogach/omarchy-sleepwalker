@@ -39,8 +39,7 @@ is_inhibit_active() {
 # install it may not be loaded yet. Wait briefly, then point at doctor.
 wait_inhibit() {
   is_ignore_on || return 0
-  local i
-  for i in $(seq 1 12); do
+  for _ in $(seq 1 12); do
     is_inhibit_active && return 0
     sleep 0.5
   done

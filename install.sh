@@ -98,7 +98,7 @@ systemctl --user daemon-reload >/dev/null 2>&1 || true
 
 # Legacy plugin dirs (old lid id, staging leftovers).
 omarchy plugin remove "$OLD_ID" --yes >/dev/null 2>&1 || true
-rm -rf "$PLUGINS_DIR/$OLD_ID" "$PLUGINS_DIR/.$OLD_ID.staging" "$PLUGINS_DIR/.$OLD_ID.retired" 2>/dev/null || true
+rm -rf "${PLUGINS_DIR:?}/$OLD_ID" "$PLUGINS_DIR/.$OLD_ID.staging" "$PLUGINS_DIR/.$OLD_ID.retired" 2>/dev/null || true
 
 # Legacy derived indicators clones (built by <0.2.0 install.sh): the plugin IS
 # the clone now, so these are redundant forks. Remove ours, spare others'.
@@ -153,12 +153,24 @@ install -m 755 "$HERE/bin/omarchy-system-lid-close" "$BIN_DIR/omarchy-system-lid
 # /usr/share/omarchy/bin first, so the stock script can win over our shim and
 # lock the session despite the toggle. An absolute path wins everywhere.
 # Managed block in the user's bindings.lua: ours to refresh, theirs to keep.
+# Backups are safety, not residue: keep the newest 3, prune the rest.
+prune_backups() {
+  local base="$1" f
+  # shellcheck disable=SC2012
+  for f in $(ls -t "$base".bak.* 2>/dev/null | tail -n +4); do rm -f "$f"; done
+}
+
 pin_lid_binding() {
   local bindings="$HOME/.config/hypr/bindings.lua"
   local begin="-- BEGIN omarchy-sleepwalker (managed by install.sh - do not edit)"
   local end="-- END omarchy-sleepwalker"
   mkdir -p "$(dirname "$bindings")"
   [[ -f $bindings ]] || : > "$bindings"
+  # A pre-existing Lid Switch binding outside our block (e.g. the user's own
+  # lock script) is about to be shadowed by hl.unbind — say so, with backup.
+  if grep -q "Lid Switch" "$bindings" 2>/dev/null && ! grep -q "^-- BEGIN omarchy-sleepwalker" "$bindings"; then
+    echo "warning: $bindings already binds Lid Switch — our pin shadows it (backup kept)" >&2
+  fi
   local tmp
   tmp=$(mktemp)
   cp -f "$bindings" "$tmp"
@@ -179,6 +191,7 @@ EOF
     echo "· lid binding already pinned"
   else
     cp -f "$bindings" "$bindings.bak.$(date +%s)"
+    prune_backups "$bindings"
     mv "$tmp" "$bindings"
     echo "· lid binding pinned to $BIN_DIR/omarchy-system-lid-close"
   fi
@@ -189,7 +202,19 @@ pin_lid_binding
 
 # --- enable (in-place replace of the built-in strip, settings preserved) ---
 
-if omarchy plugin list --json 2>/dev/null | jq -e --arg id "$ID" 'any(.[]; .id == $id)' >/dev/null; then
+# Without jq the JSON check below falls back to grep; the layout edits
+# stay skipped (jq-only) and say so.
+plugin_added() {
+  local list
+  list=$(omarchy plugin list --json 2>/dev/null) || return 1
+  if command -v jq >/dev/null 2>&1; then
+    printf '%s' "$list" | jq -e --arg id "$ID" 'any(.[]; .id == $id)' >/dev/null
+  else
+    printf '%s' "$list" | grep -q -- "\"id\"[[:space:]]*:[[:space:]]*\"$ID\""
+  fi
+}
+
+if plugin_added; then
   omarchy plugin enable "$ID" >/dev/null 2>&1 || true
   # The enable replaces the built-in strip in place and inherits its explicit
   # `items` — which predate Laptop. Ensure it once so the icon actually shows.
@@ -212,6 +237,8 @@ if omarchy plugin list --json 2>/dev/null | jq -e --arg id "$ID" 'any(.[]; .id =
       )' \
       "$HOME/.config/omarchy/shell.json" > "$tmp" 2>/dev/null \
       && mv "$tmp" "$HOME/.config/omarchy/shell.json" || rm -f "$tmp"
+  else
+    echo "warning: jq or shell.json missing — skipping Laptop/layout ensure (install jq and re-run)" >&2
   fi
   omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
 else
@@ -235,7 +262,7 @@ cat <<EOF
 
   Done. CLI + shim installed; the plugin itself comes from the store:
 
-    omarchy plugin add https://github.com/tymurbogach/omarchy-sleepwalker.git --enable
+    omarchy plugin add https://github.com/tymurbogach/omarchy-sleepwalker.git --enable --yes
 
   Bar: Laptop indicator inside the strip (same size/style as the other six).
        Click toggles lid ignore; dim when off, full when on.

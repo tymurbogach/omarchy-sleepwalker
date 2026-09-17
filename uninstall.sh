@@ -17,6 +17,13 @@ SHIM="$BIN_DIR/omarchy-system-lid-close"
 
 ours() { [[ -f $1 ]] && grep -qi "sleepwalker" "$1"; }
 
+# Backups are safety, not residue: keep the newest 3, prune the rest.
+prune_backups() {
+  local base="$1" f
+  # shellcheck disable=SC2012
+  for f in $(ls -t "$base".bak.* 2>/dev/null | tail -n +4); do rm -f "$f"; done
+}
+
 echo "· stopping legacy inhibitor units (<0.2.0)"
 for u in "${LEGACY_UNITS[@]}"; do
   if [[ -f $SYSTEMD_USER_DIR/$u ]]; then
@@ -40,6 +47,7 @@ echo "· removing lid binding override (stock binding takes over again)"
 BINDINGS="$HOME/.config/hypr/bindings.lua"
 if [[ -f $BINDINGS ]] && grep -q "^-- BEGIN omarchy-sleepwalker" "$BINDINGS"; then
   cp -f "$BINDINGS" "$BINDINGS.bak.$(date +%s)"
+  prune_backups "$BINDINGS"
   sed -i "/^-- BEGIN omarchy-sleepwalker/,/^-- END omarchy-sleepwalker$/d" "$BINDINGS"
   sed -i -e :a -e '/./!{$d;N;ba' -e '}' "$BINDINGS"
   echo "  lid binding override removed"

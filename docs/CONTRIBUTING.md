@@ -105,6 +105,8 @@ user edits elsewhere in the file always survive install and uninstall.
   notes live here, in `docs/`.
 - Zero residue on remove: `uninstall.sh` leaves no files, caches or stray
   `shell.json` entries behind, and removes only the files that it can verify
-  as its own (see the `ours()` check in `uninstall.sh`).
+  as its own (see the `ours()` check in `uninstall.sh`). Safety backups
+  (`*.bak.*` beside the edited file) are capped at the newest 3 by
+  `prune_backups` in both scripts.
 - Commits: English, imperative, one concern per commit, authored by the
   maintainer. No tool bylines or `Co-Authored-By` lines for tools.
