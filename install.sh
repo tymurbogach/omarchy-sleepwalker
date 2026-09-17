@@ -264,7 +264,14 @@ plugin_added() {
 }
 
 if plugin_added; then
-  omarchy plugin enable "$ID" >/dev/null 2>&1 || true
+  # Enable is idempotent registry-side, but it still costs a replace+rescan
+  # storm — skip it when already enabled. (Without jq we cannot see the
+  # flag, so run it unconditionally there.)
+  if omarchy plugin list --json 2>/dev/null | jq -e --arg id "$ID" 'any(.[]; .id == $id and .enabled == true)' >/dev/null 2>&1; then
+    echo "· plugin already enabled"
+  else
+    omarchy plugin enable "$ID" >/dev/null 2>&1 || true
+  fi
   # The enable replaces the built-in strip in place and inherits its explicit
   # `items` — which predate Laptop. Ensure it once so the icon actually shows.
   # (No `items` key at all means "defaults", which already include Laptop.)
