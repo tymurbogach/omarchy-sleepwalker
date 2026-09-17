@@ -216,7 +216,7 @@ if omarchy plugin list --json 2>/dev/null | jq -e --arg id "$ID" 'any(.[]; .id =
   omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
 else
   echo "· plugin not added yet — finish with:"
-  echo "    omarchy plugin add https://github.com/tymurbogach/omarchy-sleepwalker.git --enable"
+  echo "    omarchy plugin add https://github.com/tymurbogach/omarchy-sleepwalker.git --enable --yes"
 fi
 
 echo
@@ -243,4 +243,8 @@ cat <<EOF
   Verify:
     $CLI lid on && systemd-inhibit --list | grep -i sleepwalker
     # close lid 10s → panel off, no suspend, no lock (lock opt-in: $CLI lock on)
+
+  Note: if the shell crashes mid-install (known stock Quickshell
+  instability on reload storms), wait for its auto-restart and run
+  $CLI doctor — the install stays valid.
 EOF
