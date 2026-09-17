@@ -46,6 +46,21 @@ wait_inhibit() {
   echo "warning: toggle on but inhibitor inactive — run: $SELF doctor" >&2
 }
 
+# Crash-orphaned inhibitors (PPID 1) survive shell restarts and plain toggle
+# flips: logind ORs duplicate handles, so a stray keeps the lid inhibited
+# after `lid off`. All handles we ever spawn carry our --who string, so reap
+# by exact match. Called only when the toggle is off, when nothing should
+# be held; if the live Service still thinks otherwise it respawns its own.
+reap_strays() {
+  local pids
+  # [w] trick: the pattern must not match our own command line when a
+  # caller (or test) carries the literal string.
+  pids=$(pgrep -f "systemd-inhibit.*--who=Omarchy Sleepwalke[r]" 2>/dev/null || true)
+  [[ -n $pids ]] || return 0
+  # shellcheck disable=SC2086
+  kill $pids 2>/dev/null || true
+}
+
 set_lid() {
   local action="$1"
   case "$action" in
@@ -56,6 +71,7 @@ set_lid() {
       ;;
     off)
       rm -f "$TOGGLE_IGNORE" "$TOGGLE_IGNORE_LEGACY"
+      reap_strays
       ;;
     toggle|"")
       if is_ignore_on; then set_lid off; else set_lid on; fi
@@ -138,7 +154,8 @@ cmd_doctor() {
       omarchy plugin enable "$ID" >/dev/null 2>&1 || echo "· enable it with: omarchy plugin enable $ID" >&2
     fi
   elif [[ $active == false && $inhibit == true ]]; then
-    echo "· stray inhibitor with toggle off — it belongs to a dying shell; restarting shell to release it"
+    echo "· stray inhibitor with toggle off — reaping orphans, then restarting shell to let the Service re-evaluate"
+    reap_strays
     omarchy-restart-shell >/dev/null 2>&1 || true
   else
     echo "· in sync"

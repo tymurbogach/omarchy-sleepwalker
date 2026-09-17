@@ -48,7 +48,9 @@ Three moving parts, one shared state directory, no polling:
   the toggle is on. There is no systemd unit, so `omarchy plugin add` alone is
   a working install. `runWrite` and `writerBusy` serialize the writes, so a
   fast second toggle waits in a queue instead of racing a second bash call
-  over the same state files.
+  over the same state files. If the shell crashes while on, its inhibitor
+  child is orphaned (PPID 1): `lid off`, `doctor` and `uninstall.sh` reap it
+  by `--who` match (`reap_strays`), because a restart alone never kills it.
 - **`Indicators.qml`** (entry point `barWidget`) is a clone of the stock
   Omarchy indicator strip (`$OMARCHY_PATH/shell/plugins/bar/widgets/Indicators.qml`).
   `install.sh --sync-stock` regenerates it with three documented patches (see

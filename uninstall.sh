@@ -62,6 +62,16 @@ echo "· clearing toggles (off = gone)"
 rm -f "$HOME/.local/state/omarchy/toggles/sleepwalker" "$HOME/.local/state/omarchy/toggles/lid-ignore"
 rm -f "$HOME/.local/state/omarchy/toggles/lid-lock"
 
+# Reap crash-orphaned inhibitors (PPID 1): nothing should be held now, and a
+# restart alone never kills them. Match our --who string ([r] trick so the
+# pattern never matches our own command line).
+strays=$(pgrep -f "systemd-inhibit.*--who=Omarchy Sleepwalke[r]" 2>/dev/null || true)
+if [[ -n $strays ]]; then
+  # shellcheck disable=SC2086
+  kill $strays 2>/dev/null || true
+  echo "· reaped orphaned inhibitor(s)"
+fi
+
 # Legacy (<0.2.0) derived indicators clones: remove ours, spare others'.
 for d in "$PLUGINS_DIR"/*.indicators; do
   [[ -d $d ]] || continue
