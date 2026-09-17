@@ -11,7 +11,7 @@ Laptops suspend when you close the lid. Sleepwalker adds a **Laptop indicator** 
 | Lid closed, Sleepwalker… | Result |
 |---|---|
 | **ON** | Panel off. No suspend, no hibernate, no lock. Keeps working. |
-| **OFF** (stock) | Suspend-then-hibernate (+ lock unless docked). |
+| **OFF** (stock) | Suspend (+ lock unless docked). |
 | **ON + lock** (`lock on`) | Panel off + locked. Still no suspend. |
 
 ## Looks stock, because it is the strip
@@ -40,7 +40,7 @@ moves: it only ensures `Laptop` is in the strip's items, wherever it sits.
 | Step | What you get |
 |---|---|
 | `plugin add` | The indicator strip with Laptop (inherits your indicator list). |
-| `install.sh` | Adds Laptop to the strip, puts the CLI on `PATH`, installs the lid-close shim, and pins the lid binding to the shim by absolute path (bare names resolve by `PATH`, and systemd-unit contexts would run stock and lock). Restarts the shell once if the layout changed, never on a no-op re-run. Everything inside `$HOME` — no sudo, no services. |
+| `install.sh` | Adds Laptop to the strip, puts the CLI on `PATH`, installs the lid-close shim, and pins the lid binding to the shim by absolute path (bare names resolve by `PATH`, and systemd-unit contexts would run stock and lock). Restarts the shell once if the layout changed, so a first load always rebuilds; never on a no-op re-run. Everything inside `$HOME` — no sudo, no services. |
 
 The inhibitor is held by the plugin's own service while the toggle is on; disabling or removing the plugin releases it.
 
@@ -57,7 +57,8 @@ omarchy-sleepwalker doctor              # reconcile toggle vs inhibitor
 
 `lock` is opt-in and off by default; with `lock on` the lid still never
 suspends. Stock idle keeps counting with the lid closed (screensaver at
-150 s, lock at 600 s) — that is Omarchy behavior, not controlled here.
+`idle.screensaver`, lock at `idle.lock`; stock defaults 150 s / 300 s) —
+that is Omarchy behavior, not controlled here.
 
 Configure like any indicators strip:
 
@@ -70,6 +71,10 @@ After an `omarchy update`, refresh the stock indicator copies (Laptop is untouch
 ```sh
 ./install.sh --sync-stock
 ```
+
+After every plugin update (`omarchy plugin update`), re-run `./install.sh`
+— the store refreshes the plugin dir, but the CLI, shim and binding pin
+only update when the installer runs (it is idempotent).
 
 ## Remove
 

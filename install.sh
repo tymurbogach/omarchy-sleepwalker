@@ -233,6 +233,9 @@ if plugin_added; then
   # The enable replaces the built-in strip in place and inherits its explicit
   # `items` — which predate Laptop. Ensure it once so the icon actually shows.
   # (No `items` key at all means "defaults", which already include Laptop.)
+  # A present-but-broken `items` (wrong type — e.g. a string left by the
+  # `setBarWidget` IPC path, which mangles JSON arrays) is repaired to
+  # ["Laptop"]: the curation it replaced is already unrecoverable.
   # Principle: integrate, never move. This only touches our entry's `items`,
   # wherever it sits; it never reorders or relocates layout entries. Install
   # with --yes so the section question never displaces the inherited slot.
@@ -243,9 +246,13 @@ if plugin_added; then
     jq --arg id "$ID" '
       .bar.layout |= with_entries(
         .value |= (map(
-           if type == "object" and (.id // "") == $id and (.items | type) == "array"
-           then .items |= (reduce .[] as $x ([]; if index($x) then . else . + [$x] end)
-                           | if index("Laptop") then . else . + ["Laptop"] end)
+           if type == "object" and (.id // "") == $id
+           then if (.items | type) == "array"
+                then .items |= (reduce .[] as $x ([]; if index($x) then . else . + [$x] end)
+                                | if index("Laptop") then . else . + ["Laptop"] end)
+                elif has("items")
+                then .items = ["Laptop"]
+                else . end
            else . end
         ) // .)
       )' \
@@ -274,9 +281,9 @@ echo
 doc_out=$("$BIN_DIR/$CLI" doctor || true)
 echo "$doc_out"
 
-# Only a shell restart rebuilds the strip from a changed layout
-# (screenshot-verified: rescanPlugins alone leaves the old strip rendering).
-# Restart at most once per run, and never on a no-op re-run: like stock
+# The strip picks up `items` edits through the shell's hot-reload, but the
+# first load / widget swap after enable is only safe with a rebuild, so
+# restart at most once per run, and never on a no-op re-run: like stock
 # plugin ops, those leave the running shell untouched.
 case "$doc_out" in
   *restarting*) ;;

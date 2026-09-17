@@ -122,8 +122,8 @@ fi
 # No rescanPlugins here: stock `plugin remove` already rescanned, and the
 # conditional restart below supersedes a second storm.
 
-# Same as install: only a restart rebuilds the bar from the edited layout —
-# and only when the layout actually changed.
+# Same as install: restart once when the layout changed, so a first load
+# always rebuilds; items edits alone already propagate through hot-reload.
 layout_changed=false
 if [[ -f "$HOME/.config/omarchy/shell.json" ]]; then
   if [[ -n $layout_sum_before ]]; then
@@ -141,7 +141,7 @@ fi
 
 cat <<EOF
   Removed (CLI, shim, toggles, legacy).
-  Lid close is back to stock: suspend-then-hibernate.
+  Lid close is back to stock: suspend.
 
   To also remove the bar indicator itself:
     omarchy plugin remove $ID
