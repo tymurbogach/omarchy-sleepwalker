@@ -33,7 +33,7 @@ SYSTEMD_USER_DIR="$HOME/.config/systemd/user"
 OMARCHY_SRC="${OMARCHY_PATH:-/usr/share/omarchy}"
 
 # --- refresh derived files from Omarchy's current source -------------------
-# Indicators.qml is a clone of stock plus two documented patches (see the file
+# Indicators.qml is a clone of stock plus three documented patches (see the file
 # header). The six sibling indicators are verbatim copies. Re-run after an
 # Omarchy update so the strip never becomes a frozen fork.
 sync_stock() {
@@ -165,10 +165,12 @@ install -m 755 "$HERE/bin/omarchy-system-lid-close" "$BIN_DIR/omarchy-system-lid
 # lock the session despite the toggle. An absolute path wins everywhere.
 # Managed block in the user's bindings.lua: ours to refresh, theirs to keep.
 # Backups are safety, not residue: keep the newest 3, prune the rest.
+# mapfile (line-split) so paths with spaces survive; plain $(...) would not.
 prune_backups() {
   local base="$1" f
-  # shellcheck disable=SC2012
-  for f in $(ls -t "$base".bak.* 2>/dev/null | tail -n +4); do rm -f "$f"; done
+  local -a bak=()
+  mapfile -t bak < <(ls -t "$base".bak.* 2>/dev/null || true) || true
+  for f in "${bak[@]:3}"; do rm -f "$f"; done
 }
 
 pin_lid_binding() {

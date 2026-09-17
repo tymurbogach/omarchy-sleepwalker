@@ -18,10 +18,12 @@ SHIM="$BIN_DIR/omarchy-system-lid-close"
 ours() { [[ -f $1 ]] && grep -qi "sleepwalker" "$1"; }
 
 # Backups are safety, not residue: keep the newest 3, prune the rest.
+# mapfile (line-split) so paths with spaces survive; plain $(...) would not.
 prune_backups() {
   local base="$1" f
-  # shellcheck disable=SC2012
-  for f in $(ls -t "$base".bak.* 2>/dev/null | tail -n +4); do rm -f "$f"; done
+  local -a bak=()
+  mapfile -t bak < <(ls -t "$base".bak.* 2>/dev/null || true) || true
+  for f in "${bak[@]:3}"; do rm -f "$f"; done
 }
 
 echo "· stopping legacy inhibitor units (<0.2.0)"

@@ -16,7 +16,7 @@ BarIndicator {
   // Fallback when the service is unreachable (never on a healthy install):
   // the CLI bundled in this plugin, resolved relative to this file — never
   // looked up on PATH, because `omarchy plugin add` runs no install hook.
-  readonly property string fallbackCli: String(Qt.resolvedUrl("../bin/omarchy-sleepwalker")).replace(/^file:\/\//, "")
+  readonly property string fallbackCli: decodeURIComponent(String(Qt.resolvedUrl("../bin/omarchy-sleepwalker")).replace(/^file:\/\//, ""))
 
   property bool probedOn: false
 
