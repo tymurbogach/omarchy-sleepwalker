@@ -35,6 +35,18 @@ is_inhibit_active() {
   systemd-inhibit --list 2>/dev/null | grep -qF "$INHIBIT_WHO"
 }
 
+# After `lid on` the Service spawns the inhibitor reactively; on a fresh
+# install it may not be loaded yet. Wait briefly, then point at doctor.
+wait_inhibit() {
+  is_ignore_on || return 0
+  local i
+  for i in $(seq 1 12); do
+    is_inhibit_active && return 0
+    sleep 0.5
+  done
+  echo "warning: toggle on but inhibitor inactive — run: $SELF doctor" >&2
+}
+
 set_lid() {
   local action="$1"
   case "$action" in
@@ -150,7 +162,7 @@ USAGE
 
 case "${1:-status}" in
   status) shift || true; cmd_status "${1:-}" ;;
-  lid)    shift || true; set_lid "${1:-toggle}"; cmd_status --json >/dev/null; echo "lid $(is_ignore_on && echo on || echo off)" ;;
+  lid)    shift || true; set_lid "${1:-toggle}"; echo "lid $(is_ignore_on && echo on || echo off)"; wait_inhibit ;;
   lock)   shift || true; set_lock "${1:-toggle}"; echo "lock-on-lid $(is_lock_on && echo on || echo off)" ;;
   doctor) cmd_doctor ;;
   -h|--help|help) usage ;;
