@@ -16,20 +16,13 @@ BIN_DIR="$HOME/.local/bin"
 SYSTEMD_USER_DIR="$HOME/.config/systemd/user"
 SHIM="$BIN_DIR/omarchy-system-lid-close"
 
-# Only remove files we can prove are ours: exact known names plus our own
-# header line. A foreign file that merely mentions sleepwalker is left alone.
+# Only remove files we can prove are ours: exact known names (callers) plus
+# our own header line within the first lines (shebang occupies line 1).
+# A foreign file at the same path without our header is left alone.
 ours() {
-  local f="$1" head=""
-  [[ -f $1 ]] || return 1
-  head=$(head -n 1 "$f" 2>/dev/null || true)
-  case "$(basename "$f"):$head" in
-    "$CLI:# omarchy-sleepwalker"*) return 0 ;;
-    "${CLI}-uninstall:# Undoes what install.sh did"*) return 0 ;;
-    "$OLD_CLI:# omarchy-lid"*) return 0 ;;
-    "${OLD_CLI}-uninstall:# Undoes what install.sh did"*) return 0 ;;
-    "omarchy-system-lid-close:# omarchy-system-lid-close"*) return 0 ;;
-  esac
-  return 1
+  local f="$1"
+  [[ -f $f ]] || return 1
+  head -n 5 "$f" 2>/dev/null | grep -qE "^(# omarchy-sleepwalker|# omarchy-system-lid-close|# Undoes what install\.sh did|# omarchy-lid)"
 }
 
 # Backups are safety, not residue: keep the newest 3, prune the rest.
