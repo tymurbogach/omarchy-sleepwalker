@@ -129,9 +129,14 @@ if command -v jq >/dev/null 2>&1 && [[ -f $HOME/.config/omarchy/shell.json ]]; t
   done
 fi
 
-# Legacy toggle name → new one.
-if [[ -f $HOME/.local/state/omarchy/toggles/lid-ignore && ! -f $HOME/.local/state/omarchy/toggles/sleepwalker ]]; then
-  cp -f "$HOME/.local/state/omarchy/toggles/lid-ignore" "$HOME/.local/state/omarchy/toggles/sleepwalker" 2>/dev/null || true
+# Legacy toggle name → new one (move, not copy: nothing reads it back).
+# Both present means an earlier copy-migration; drop the legacy leftover.
+if [[ -f $HOME/.local/state/omarchy/toggles/lid-ignore ]]; then
+  if [[ ! -f $HOME/.local/state/omarchy/toggles/sleepwalker ]]; then
+    mv -f "$HOME/.local/state/omarchy/toggles/lid-ignore" "$HOME/.local/state/omarchy/toggles/sleepwalker" 2>/dev/null || true
+  else
+    rm -f "$HOME/.local/state/omarchy/toggles/lid-ignore" 2>/dev/null || true
+  fi
 fi
 
 # Legacy PATH leftovers + post-update hook from the derive era.
@@ -168,7 +173,8 @@ pin_lid_binding() {
   [[ -f $bindings ]] || : > "$bindings"
   # A pre-existing Lid Switch binding outside our block (e.g. the user's own
   # lock script) is about to be shadowed by hl.unbind — say so, with backup.
-  if grep -q "Lid Switch" "$bindings" 2>/dev/null && ! grep -q "^-- BEGIN omarchy-sleepwalker" "$bindings"; then
+  # (Our own block mentions Lid Switch too, so look past it.)
+  if sed "/^-- BEGIN omarchy-sleepwalker/,/^-- END omarchy-sleepwalker$/d" "$bindings" 2>/dev/null | grep -q "Lid Switch"; then
     echo "warning: $bindings already binds Lid Switch — our pin shadows it (backup kept)" >&2
   fi
   local tmp
