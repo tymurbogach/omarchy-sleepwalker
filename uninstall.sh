@@ -4,6 +4,7 @@
 # (that restores the built-in indicators strip in place, by itself).
 #   ./uninstall.sh
 set -uo pipefail
+export LC_ALL=C  # stable grep/sort classes regardless of user locale
 
 ID="io.github.tymurbogach.sleepwalker"
 OLD_ID="io.github.tymurbogach.lid"
@@ -15,7 +16,21 @@ BIN_DIR="$HOME/.local/bin"
 SYSTEMD_USER_DIR="$HOME/.config/systemd/user"
 SHIM="$BIN_DIR/omarchy-system-lid-close"
 
-ours() { [[ -f $1 ]] && grep -qi "sleepwalker" "$1"; }
+# Only remove files we can prove are ours: exact known names plus our own
+# header line. A foreign file that merely mentions sleepwalker is left alone.
+ours() {
+  local f="$1" head=""
+  [[ -f $1 ]] || return 1
+  head=$(head -n 1 "$f" 2>/dev/null || true)
+  case "$(basename "$f"):$head" in
+    "$CLI:# omarchy-sleepwalker"*) return 0 ;;
+    "${CLI}-uninstall:# Undoes what install.sh did"*) return 0 ;;
+    "$OLD_CLI:# omarchy-lid"*) return 0 ;;
+    "${OLD_CLI}-uninstall:# Undoes what install.sh did"*) return 0 ;;
+    "omarchy-system-lid-close:# omarchy-system-lid-close"*) return 0 ;;
+  esac
+  return 1
+}
 
 # Backups are safety, not residue: keep the newest 3, prune the rest.
 # mapfile (line-split) so paths with spaces survive; plain $(...) would not.
@@ -24,6 +39,17 @@ prune_backups() {
   local -a bak=()
   mapfile -t bak < <(ls -t "$base".bak.* 2>/dev/null || true) || true
   for f in "${bak[@]:3}"; do rm -f "$f"; done
+}
+
+# Move jq output into place only on real content change; never clobber the
+# original on tool failure. Same-dir tmp (see callers) keeps rename atomic.
+commit_tmp() {
+  local tmp="$1" dest="$2" st
+  cmp -s "$tmp" "$dest" 2>/dev/null; st=$?
+  if [[ $st -eq 0 ]]; then rm -f "$tmp"
+  elif [[ $st -eq 1 ]]; then mv "$tmp" "$dest"
+  else echo "warning: cannot verify $dest — leaving it untouched" >&2; rm -f "$tmp"
+  fi
 }
 
 echo "· stopping legacy inhibitor units (<0.2.0)"
@@ -38,7 +64,7 @@ systemctl --user daemon-reload >/dev/null 2>&1 || true
 echo "· removing CLI and lid-close shim (only if ours)"
 for f in "$BIN_DIR/$CLI" "$BIN_DIR/${CLI}-uninstall" "$BIN_DIR/$OLD_CLI" "$BIN_DIR/${OLD_CLI}-uninstall"; do
   if [[ -f $f || -L $f ]]; then
-    if ours "$f" || [[ -L $f && $(readlink "$f") == *sleepwalker* ]]; then rm -f "$f"; else echo "  leaving foreign $f alone" >&2; fi
+    if ours "$f" || [[ -L $f && $(basename "$(readlink "$f")") == "$CLI" ]]; then rm -f "$f"; else echo "  leaving foreign $f alone" >&2; fi
   fi
 done
 if [[ -f $SHIM ]]; then
@@ -48,11 +74,17 @@ fi
 echo "· removing lid binding override (stock binding takes over again)"
 BINDINGS="$HOME/.config/hypr/bindings.lua"
 if [[ -f $BINDINGS ]] && grep -q "^-- BEGIN omarchy-sleepwalker" "$BINDINGS"; then
-  cp -f "$BINDINGS" "$BINDINGS.bak.$(date +%s)"
-  prune_backups "$BINDINGS"
-  sed -i "/^-- BEGIN omarchy-sleepwalker/,/^-- END omarchy-sleepwalker$/d" "$BINDINGS"
-  sed -i -e :a -e '/./!{$d;N;ba' -e '}' "$BINDINGS"
-  echo "  lid binding override removed"
+  # Same guard as install: BEGIN without END means an aborted edit — refuse
+  # rather than range-deleting to EOF.
+  if ! grep -q "^-- END omarchy-sleepwalker$" "$BINDINGS"; then
+    echo "warning: stale BEGIN without END in $BINDINGS — leaving it untouched (fix by hand)" >&2
+  else
+    cp -f "$BINDINGS" "$BINDINGS.bak.$(date +%s).$$"
+    prune_backups "$BINDINGS"
+    sed -i "/^-- BEGIN omarchy-sleepwalker/,/^-- END omarchy-sleepwalker$/d" "$BINDINGS"
+    sed -i -e :a -e '/./!{$d;N;ba' -e '}' "$BINDINGS"
+    echo "  lid binding override removed"
+  fi
 fi
 
 echo "· removing legacy post-update hook"
@@ -85,38 +117,54 @@ done
 
 # Layout change detection (same as install.sh): restart only if the strip
 # actually changed; re-runs leave the running shell untouched like stock.
+MD5_OK=false
+command -v md5sum >/dev/null 2>&1 && MD5_OK=true
 layout_sum_before=""
-[[ -f "$HOME/.config/omarchy/shell.json" ]] && layout_sum_before=$(md5sum "$HOME/.config/omarchy/shell.json" | cut -d' ' -f1)
+[[ -f "$HOME/.config/omarchy/shell.json" ]] && $MD5_OK && layout_sum_before=$(md5sum "$HOME/.config/omarchy/shell.json" | cut -d' ' -f1)
 
-# Legacy (<0.2.0) separate-widget slots under either id.
+# Legacy (<0.2.0) separate-widget slots under either id. Same keep rules as
+# install: entries with `items` and bare strings are never stale slots.
 if command -v jq >/dev/null 2>&1 && [[ -f "$HOME/.config/omarchy/shell.json" ]]; then
   for section in left center right; do
-    tmp=$(mktemp)
+    tmp=$(mktemp "$HOME/.config/omarchy/.shell.json.tmp.XXXXXX")
     jq --arg id "$ID" --arg old "$OLD_ID" --arg sec "$section" '
-      .bar.layout[$sec] |= (map(
-        (if type == "string" then . else (.id // "") end) as $eid
-        | select($eid != $old and ($eid != $id or (type == "object" and has("items"))))
-      ) // .)' \
+      if (.bar.layout[$sec] | type) == "array" then
+        .bar.layout[$sec] |= (map(
+          (if type == "string" then .
+            elif type == "object" then (.id // "")
+            else "" end) as $eid
+          | select($eid != $old and ($eid != $id or type == "string" or (type == "object" and has("items"))))
+        ) // .)
+      else . end' \
       "$HOME/.config/omarchy/shell.json" > "$tmp" 2>/dev/null \
-      && { if cmp -s "$tmp" "$HOME/.config/omarchy/shell.json"; then rm -f "$tmp"; else mv "$tmp" "$HOME/.config/omarchy/shell.json"; fi; } || rm -f "$tmp"
+      && commit_tmp "$tmp" "$HOME/.config/omarchy/shell.json" || rm -f "$tmp"
   done
 fi
 
 # Removing the plugin restores the built-in strip with a copy of OUR entry —
 # including "Laptop" in items, which the built-in cannot load. Take it out of
 # both ids so this works whether it runs before or after `plugin remove`.
+# A present-but-broken `items` (wrong type) loses the key and falls back to
+# defaults — same repair direction as install, mirrored for removal.
 if command -v jq >/dev/null 2>&1 && [[ -f "$HOME/.config/omarchy/shell.json" ]]; then
-  tmp=$(mktemp)
+  tmp=$(mktemp "$HOME/.config/omarchy/.shell.json.tmp.XXXXXX")
   jq --arg id "$ID" '
-    .bar.layout |= with_entries(
-      .value |= (map(
-        if type == "object" and ((.id // "") == "omarchy.indicators" or (.id // "") == $id)
-           and (.items | type) == "array"
-        then .items |= map(select(. != "Laptop")) else . end
-      ) // .)
-    )' \
+    if (.bar.layout | type) == "object" then
+      .bar.layout |= with_entries(
+        .value |= ((if type == "array" then
+          map(
+            if type == "object" and ((.id // "") == "omarchy.indicators" or (.id // "") == $id)
+            then if (.items | type) == "array"
+                 then .items |= map(select(. != "Laptop"))
+                 elif has("items") then del(.items)
+                 else . end
+            else . end
+          )
+        else . end) // .)
+      )
+    else . end' \
     "$HOME/.config/omarchy/shell.json" > "$tmp" 2>/dev/null \
-    && { if cmp -s "$tmp" "$HOME/.config/omarchy/shell.json"; then rm -f "$tmp"; else mv "$tmp" "$HOME/.config/omarchy/shell.json"; fi; } || rm -f "$tmp"
+    && commit_tmp "$tmp" "$HOME/.config/omarchy/shell.json" || rm -f "$tmp"
 fi
 
 # No rescanPlugins here: stock `plugin remove` already rescanned, and the
@@ -127,7 +175,7 @@ fi
 layout_changed=false
 if [[ -f "$HOME/.config/omarchy/shell.json" ]]; then
   if [[ -n $layout_sum_before ]]; then
-    [[ $(md5sum "$HOME/.config/omarchy/shell.json" | cut -d' ' -f1) != "$layout_sum_before" ]] && layout_changed=true
+    $MD5_OK && [[ $(md5sum "$HOME/.config/omarchy/shell.json" | cut -d' ' -f1) != "$layout_sum_before" ]] && layout_changed=true
   else
     layout_changed=true
   fi

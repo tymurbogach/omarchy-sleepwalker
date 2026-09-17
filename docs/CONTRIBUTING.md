@@ -5,7 +5,8 @@ It adds a "Laptop" indicator to the Omarchy bar. While the indicator is on,
 the plugin holds a `systemd-inhibit --what=handle-lid-switch`, so a closed lid
 turns the panel off instead of suspending the laptop. It ships as a clone of
 the stock Omarchy indicator strip plus one new indicator, not as a separate
-bar widget.
+bar widget. The contract lives in `docs/SPEC.md` — read it before changing
+behavior.
 
 ## Commands
 

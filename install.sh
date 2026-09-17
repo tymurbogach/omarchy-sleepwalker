@@ -16,6 +16,7 @@
 #   ./install.sh --sync-stock refresh Indicators.qml + stock indicators from
 #                             Omarchy's current source (after `omarchy update`)
 set -euo pipefail
+export LC_ALL=C  # stable grep/sort classes regardless of user locale
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ID="io.github.tymurbogach.sleepwalker"
@@ -26,6 +27,10 @@ LEGACY_UNITS=("omarchy-sleepwalker-inhibit.service" "omarchy-lid-inhibit.service
 
 command -v omarchy >/dev/null || { echo "this needs Omarchy" >&2; exit 1; }
 command -v jq >/dev/null || echo "warning: jq not found — Laptop icon and layout migration will be skipped" >&2
+# md5sum drives layout-change detection; without it every run assumes changed.
+MD5_OK=false
+command -v md5sum >/dev/null 2>&1 && MD5_OK=true
+$MD5_OK || echo "warning: md5sum not found — shell restarts on every run" >&2
 
 PLUGINS_DIR="$HOME/.config/omarchy/plugins"
 BIN_DIR="$HOME/.local/bin"
@@ -83,6 +88,17 @@ if [[ ${1:-} == "--sync-stock" ]]; then
   exit 0
 fi
 
+# Move jq output into place only on real content change; never clobber the
+# original on tool failure. Same-dir tmp (see callers) keeps rename atomic.
+commit_tmp() {
+  local tmp="$1" dest="$2" st
+  cmp -s "$tmp" "$dest" 2>/dev/null; st=$?
+  if [[ $st -eq 0 ]]; then rm -f "$tmp"
+  elif [[ $st -eq 1 ]]; then mv "$tmp" "$dest"
+  else echo "warning: cannot verify $dest — leaving it untouched" >&2; rm -f "$tmp"
+  fi
+}
+
 # --- legacy migration (<0.2.0: separate bar-widget + systemd unit + derived clone) ---
 
 echo "· migrating legacy state if present"
@@ -98,7 +114,7 @@ systemctl --user daemon-reload >/dev/null 2>&1 || true
 
 # Legacy plugin dirs (old lid id, staging leftovers).
 omarchy plugin remove "$OLD_ID" --yes >/dev/null 2>&1 || true
-rm -rf "${PLUGINS_DIR:?}/$OLD_ID" "$PLUGINS_DIR/.$OLD_ID.staging" "$PLUGINS_DIR/.$OLD_ID.retired" 2>/dev/null || true
+rm -rf "${PLUGINS_DIR:?}/$OLD_ID" "${PLUGINS_DIR:?}/.$OLD_ID.staging" "${PLUGINS_DIR:?}/.$OLD_ID.retired" 2>/dev/null || true
 
 # Legacy derived indicators clones (built by <0.2.0 install.sh): the plugin IS
 # the clone now, so these are redundant forks. Remove ours, spare others'.
@@ -116,22 +132,27 @@ done
 # new layout (verified: rescanPlugins alone leaves the old strip rendering).
 # Re-runs with nothing to change touch neither rescan nor restart.
 layout_sum_before=""
-[[ -f $HOME/.config/omarchy/shell.json ]] && layout_sum_before=$(md5sum "$HOME/.config/omarchy/shell.json" | cut -d' ' -f1)
+[[ -f $HOME/.config/omarchy/shell.json ]] && $MD5_OK && layout_sum_before=$(md5sum "$HOME/.config/omarchy/shell.json" | cut -d' ' -f1)
 
 # Legacy separate-widget slot: <0.2.0 staged a big BarIconButton beside the
 # strip. The new model has no such widget; any layout entry with our id that
 # carries no `items` is that stale slot. (Entries WITH items are the new
-# indicators strip — never touch those.)
+# indicators strip — never touch those. Bare-string entries are user
+# shorthand — never touch those either.)
 if command -v jq >/dev/null 2>&1 && [[ -f $HOME/.config/omarchy/shell.json ]]; then
   for section in left center right; do
-    tmp=$(mktemp)
+    tmp=$(mktemp "$HOME/.config/omarchy/.shell.json.tmp.XXXXXX")
     jq --arg id "$ID" --arg old "$OLD_ID" --arg sec "$section" '
-      .bar.layout[$sec] |= (map(
-        (if type == "string" then . else (.id // "") end) as $eid
-        | select($eid != $old and ($eid != $id or (type == "object" and has("items"))))
-      ) // .)' \
+      if (.bar.layout[$sec] | type) == "array" then
+        .bar.layout[$sec] |= (map(
+          (if type == "string" then .
+            elif type == "object" then (.id // "")
+            else "" end) as $eid
+          | select($eid != $old and ($eid != $id or type == "string" or (type == "object" and has("items"))))
+        ) // .)
+      else . end' \
       "$HOME/.config/omarchy/shell.json" > "$tmp" 2>/dev/null \
-      && { if cmp -s "$tmp" "$HOME/.config/omarchy/shell.json"; then rm -f "$tmp"; else mv "$tmp" "$HOME/.config/omarchy/shell.json"; fi; } || rm -f "$tmp"
+      && commit_tmp "$tmp" "$HOME/.config/omarchy/shell.json" || rm -f "$tmp"
   done
 fi
 
@@ -186,25 +207,37 @@ pin_lid_binding() {
     echo "warning: $bindings already binds Lid Switch — our pin shadows it (backup kept)" >&2
   fi
   local tmp
-  tmp=$(mktemp)
+  tmp=$(mktemp "$(dirname "$bindings")/.bindings.lua.tmp.XXXXXX")
   cp -f "$bindings" "$tmp"
+  # A BEGIN without its END means a previous aborted edit: refuse to touch
+  # the file rather than range-deleting to EOF (GNU sed semantics).
+  if grep -q "^-- BEGIN omarchy-sleepwalker" "$tmp" && ! grep -q "^-- END omarchy-sleepwalker$" "$tmp"; then
+    echo "warning: stale BEGIN without END in $bindings — leaving it untouched (fix by hand, backup kept)" >&2
+    cp -f "$bindings" "$bindings.bak.$(date +%s).$$"
+    rm -f "$tmp"
+    return 0
+  fi
   sed -i "/^-- BEGIN omarchy-sleepwalker/,/^-- END omarchy-sleepwalker$/d" "$tmp"
   # Strip blank lines left at EOF so re-runs don't stack separators.
   sed -i -e :a -e '/./!{$d;N;ba' -e '}' "$tmp"
   [[ -s $tmp ]] && printf '\n' >> "$tmp"
+  # Lua-escape the path for the double-quoted string (\ and " only; spaces
+  # are fine inside quotes).
+  local shim_path="${BIN_DIR//\\/\\\\}"
+  shim_path="${shim_path//\"/\\\"}"
   cat >> "$tmp" <<EOF
 $begin
 -- Absolute path on purpose: bare names resolve by PATH, and systemd-unit
 -- contexts order /usr/share/omarchy/bin before ~/.local/bin (stock would win).
 hl.unbind("switch:on:Lid Switch")
-o.bind("switch:on:Lid Switch", nil, "$BIN_DIR/omarchy-system-lid-close", { locked = true })
+o.bind("switch:on:Lid Switch", nil, "$shim_path/omarchy-system-lid-close", { locked = true })
 $end
 EOF
   if cmp -s "$bindings" "$tmp"; then
     rm -f "$tmp"
     echo "· lid binding already pinned"
   else
-    cp -f "$bindings" "$bindings.bak.$(date +%s)"
+    cp -f "$bindings" "$bindings.bak.$(date +%s).$$"
     prune_backups "$bindings"
     mv "$tmp" "$bindings"
     echo "· lid binding pinned to $BIN_DIR/omarchy-system-lid-close"
@@ -224,7 +257,9 @@ plugin_added() {
   if command -v jq >/dev/null 2>&1; then
     printf '%s' "$list" | jq -e --arg id "$ID" 'any(.[]; .id == $id)' >/dev/null
   else
-    printf '%s' "$list" | grep -q -- "\"id\"[[:space:]]*:[[:space:]]*\"$ID\""
+    # Flattened first: pretty printers may split "id": and value across lines.
+    # Dots escaped, trailing boundary: sleepwalker-fork must not match.
+    printf '%s' "$list" | tr '\n' ' ' | grep -qE -- '"id"[[:space:]]*:[[:space:]]*"io\.github\.tymurbogach\.sleepwalker"($|[^0-9A-Za-z._-])'
   fi
 }
 
@@ -239,25 +274,28 @@ if plugin_added; then
   # Principle: integrate, never move. This only touches our entry's `items`,
   # wherever it sits; it never reorders or relocates layout entries. Install
   # with --yes so the section question never displaces the inherited slot.
-  # The filter also collapses duplicates from pre-0.3.1 installers, keeping
+  # The filter also collapses duplicate items inside the entry, keeping
   # first-occurrence order (never `unique`: it would reshuffle the icons).
   if command -v jq >/dev/null 2>&1 && [[ -f $HOME/.config/omarchy/shell.json ]]; then
-    tmp=$(mktemp)
+    tmp=$(mktemp "$HOME/.config/omarchy/.shell.json.tmp.XXXXXX")
     jq --arg id "$ID" '
-      .bar.layout |= with_entries(
-        .value |= (map(
-           if type == "object" and (.id // "") == $id
-           then if (.items | type) == "array"
-                then .items |= (reduce .[] as $x ([]; if index($x) then . else . + [$x] end)
-                                | if index("Laptop") then . else . + ["Laptop"] end)
-                elif has("items")
-                then .items = ["Laptop"]
-                else . end
-           else . end
-        ) // .)
-      )' \
+      if (.bar.layout | type) == "object" then
+        .bar.layout |= with_entries(
+          .value |= ((if type == "array" then
+            map(
+              if type == "object" and (.id // "") == $id
+              then if (.items | type) == "array"
+                   then .items |= (reduce .[] as $x ([]; if index($x) then . else . + [$x] end)
+                                   | if index("Laptop") then . else . + ["Laptop"] end)
+                   elif has("items") then .items = ["Laptop"]
+                   else . end
+              else . end
+            )
+          else . end) // .)
+        )
+      else . end' \
       "$HOME/.config/omarchy/shell.json" > "$tmp" 2>/dev/null \
-      && { if cmp -s "$tmp" "$HOME/.config/omarchy/shell.json"; then rm -f "$tmp"; else mv "$tmp" "$HOME/.config/omarchy/shell.json"; fi; } || rm -f "$tmp"
+      && commit_tmp "$tmp" "$HOME/.config/omarchy/shell.json" || rm -f "$tmp"
   else
     echo "warning: jq or shell.json missing — skipping Laptop/layout ensure (install jq and re-run)" >&2
   fi
@@ -271,7 +309,7 @@ fi
 layout_changed=false
 if [[ -f $HOME/.config/omarchy/shell.json ]]; then
   if [[ -n $layout_sum_before ]]; then
-    [[ $(md5sum "$HOME/.config/omarchy/shell.json" | cut -d' ' -f1) != "$layout_sum_before" ]] && layout_changed=true
+    $MD5_OK && [[ $(md5sum "$HOME/.config/omarchy/shell.json" | cut -d' ' -f1) != "$layout_sum_before" ]] && layout_changed=true
   else
     layout_changed=true
   fi

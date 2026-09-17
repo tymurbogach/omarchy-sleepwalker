@@ -42,11 +42,11 @@ moves: it only ensures `Laptop` is in the strip's items, wherever it sits.
 | `plugin add` | The indicator strip with Laptop (inherits your indicator list). |
 | `install.sh` | Adds Laptop to the strip, puts the CLI on `PATH`, installs the lid-close shim, and pins the lid binding to the shim by absolute path (bare names resolve by `PATH`, and systemd-unit contexts would run stock and lock). Restarts the shell once if the layout changed, so a first load always rebuilds; never on a no-op re-run. Everything inside `$HOME` — no sudo, no services. |
 
-The inhibitor is held by the plugin's own service while the toggle is on; disabling or removing the plugin releases it.
+The inhibitor is held by the plugin's own service while the toggle is on; disabling or removing the plugin releases it. If the shell crashes while on, the orphaned handle (PPID 1) survives: `lid off`, `doctor` and `uninstall.sh` reap it (see SPEC.md).
 
-## Use
+## Usage
 
-Click the  indicator, or from the terminal:
+Click the indicator, or from the terminal:
 
 ```sh
 omarchy-sleepwalker lid on|off|toggle   # keep working with lid closed
@@ -55,16 +55,27 @@ omarchy-sleepwalker status --json       # {"active":true,"inhibitActive":true,"l
 omarchy-sleepwalker doctor              # reconcile toggle vs inhibitor
 ```
 
+The toggle persists across reboots by design (it is a file, not a process).
+Warning: if you leave it on and shelve the laptop, it stays awake in the
+bag. Check `status` when in doubt; `lid off` always releases.
+
 `lock` is opt-in and off by default; with `lock on` the lid still never
 suspends. Stock idle keeps counting with the lid closed (screensaver at
 `idle.screensaver`, lock at `idle.lock`; stock defaults 150 s / 300 s) —
 that is Omarchy behavior, not controlled here.
 
-Configure like any indicators strip:
+## Configure
+
+Like any indicators strip. Flip `alwaysShow` with the stock CLI:
 
 ```sh
-omarchy bar set io.github.tymurbogach.sleepwalker items '["Dictation","Laptop","StayAwake"]' --json
+omarchy bar set io.github.tymurbogach.sleepwalker alwaysShow true
 ```
+
+For `items`, edit `~/.config/omarchy/shell.json` directly (the shell
+hot-reloads it). Do not use `omarchy bar set ... items ...` — the shell IPC
+transport splits on whitespace and mangles JSON arrays. The installer
+ensures `Laptop` is present and never touches your order otherwise.
 
 After an `omarchy update`, refresh the stock indicator copies (Laptop is untouched):
 
@@ -85,10 +96,18 @@ omarchy plugin remove io.github.tymurbogach.sleepwalker
 
 In this order the restored built-in strip comes back clean. Lid close returns to stock suspend.
 
+## Requirements
+
+- Omarchy 4 with `omarchy`, `omarchy-shell`, `omarchy-restart-shell` on `PATH`
+- `systemd-inhibit` (logind) for the lid inhibitor
+- Stock `omarchy-system-lid-close` + `omarchy-hyprland-monitor-clamshell` (shim delegates to them)
+- `jq` recommended (without it the installer skips layout edits with a warning)
+- `perl` only for `./install.sh --sync-stock`
+
 ## How it works
 
-- **Indicator** (`indicators/Laptop.qml`): a native `BarIndicator` bound reactively to the plugin service. No polling. The six sibling files are verbatim copies of Omarchy's stock indicators — don't edit them by hand, refresh with `./install.sh --sync-stock`.
-- **Inhibitor** (`Service.qml`): holds `systemd-inhibit --what=handle-lid-switch` exactly while the toggle is on.
+- **Indicator** (`indicators/Laptop.qml`): a native `BarIndicator` bound reactively to the plugin service. No polling on the healthy path; if the service is unreachable it falls back to the bundled CLI plus a 30 s poll. The six sibling files are verbatim copies of Omarchy's stock indicators — don't edit them by hand, refresh with `./install.sh --sync-stock`.
+- **Inhibitor** (`Service.qml`): holds `systemd-inhibit --what=handle-lid-switch` exactly while the toggle is on. No daemon: the service spawns short-lived `bash` helpers for disk state plus the one inhibitor child.
 - **No lock**: `./install.sh` places a shim earlier on `PATH` (`~/.local/bin/omarchy-system-lid-close`) that only reconciles displays instead of locking, and pins the lid binding to it by absolute path (systemd-unit contexts resolve stock first by `PATH`). Without either, stock lock applies.
 - **State**: `~/.local/state/omarchy/toggles/sleepwalker` (on = file exists) and `lid-lock` (opt-in). CLI, service and indicator read the same files.
 - **Privileges**: user session only. No sudo, no setuid, no second shell process, nothing outside `$HOME`.

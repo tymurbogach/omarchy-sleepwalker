@@ -45,14 +45,16 @@ Item {
   }
   property bool pendingRefresh: false
 
-  // Writer is serial: a second toggle while one is in flight waits its turn
-  // instead of racing two bash invocations over the same files.
+  // Writer is serial with an overflow queue: toggles arriving while one is
+  // in flight wait their turn instead of racing bash invocations over the
+  // same files. Commands are absolute per file, so draining in order stays
+  // correct across lid/lock interleaves.
   property bool writerBusy: false
-  property string pendingWrite: ""
+  property var pendingWrites: []
 
   function runWrite(command) {
     if (writerBusy) {
-      pendingWrite = command
+      pendingWrites.push(command)
       return
     }
     writerBusy = true
@@ -100,9 +102,11 @@ Item {
     stdout: SplitParser {
       onRead: function(line) {
         var text = String(line).trim()
-        if (text === "lid=on") root.lidOn = true
+        // Symmetric guard: a stale probe must not resurrect either toggle
+        // while its write is still in flight (fail-quiet, refresh corrects).
+        if (text === "lid=on") { if (!root.writerBusy) root.lidOn = true }
         else if (text === "lid=off") { if (!root.writerBusy) root.lidOn = false }
-        else if (text === "lock=on") root.lockOnLid = true
+        else if (text === "lock=on") { if (!root.writerBusy) root.lockOnLid = true }
         else if (text === "lock=off") { if (!root.writerBusy) root.lockOnLid = false }
       }
     }
@@ -119,9 +123,8 @@ Item {
     id: writer
     onExited: function() {
       root.writerBusy = false
-      if (root.pendingWrite !== "") {
-        var next = root.pendingWrite
-        root.pendingWrite = ""
+      if (root.pendingWrites.length > 0) {
+        var next = root.pendingWrites.shift()
         root.runWrite(next)
       } else {
         root.refresh()
@@ -157,7 +160,8 @@ Item {
     function lid(desired: string): string {
       if (desired === "on") root.setLid(true)
       else if (desired === "off") root.setLid(false)
-      else root.toggleLid()
+      else if (desired === undefined || desired === null || desired === "") root.toggleLid()
+      else return JSON.stringify({ error: "lid: expected on|off, got '" + desired + "'" })
       return root.statusJson()
     }
   }

@@ -9,8 +9,15 @@ BarIndicator {
 
   // Live service owned by this same plugin (Service.qml). The bar facade
   // allows a widget its own service id, so this is reactive: no polling.
-  readonly property var sleepService: (bar && bar.shell && typeof bar.shell.serviceFor === "function")
-    ? bar.shell.serviceFor("io.github.tymurbogach.sleepwalker") : null
+  // The lookup itself is guarded: a throwing serviceFor must degrade to
+  // the CLI fallback, never break property evaluation.
+  readonly property var sleepService: {
+    try {
+      if (bar && bar.shell && typeof bar.shell.serviceFor === "function")
+        return bar.shell.serviceFor("io.github.tymurbogach.sleepwalker")
+    } catch (e) { console.warn("Sleepwalker: serviceFor failed, using CLI fallback:", e) }
+    return null
+  }
   readonly property bool svcAvailable: sleepService !== null && sleepService !== undefined
 
   // Fallback when the service is unreachable (never on a healthy install):
@@ -33,7 +40,7 @@ BarIndicator {
       return
     }
     if (toggleProc.running || statusProc.running) {
-      pendingToggle = true
+      pendingToggles++
       return
     }
     toggleProc.running = true
@@ -45,7 +52,7 @@ BarIndicator {
     statusProc.running = true
   }
 
-  property bool pendingToggle: false
+  property int pendingToggles: 0
 
   onBarChanged: refresh()
   Component.onCompleted: refresh()
@@ -60,11 +67,22 @@ BarIndicator {
     id: toggleProc
     command: [root.fallbackCli, "lid", "toggle"]
     onExited: function(code) {
+      if (code !== 0) console.warn("Sleepwalker: fallback toggle failed with code", code)
       root.refresh()
       settle.restart()
-      if (root.pendingToggle) {
-        root.pendingToggle = false
-        if (!root.svcAvailable) root.toggle()
+      // Clicks queue as a counter because each is a flip: an odd remainder
+      // means one net toggle is still owed. Route it through the service if
+      // it appeared mid-flight, else re-run the fallback when free.
+      var owed = root.pendingToggles % 2
+      root.pendingToggles = 0
+      if (owed === 1) {
+        if (root.svcAvailable && typeof root.sleepService.toggleLid === "function") {
+          root.sleepService.toggleLid()
+        } else if (!root.toggleProc.running && !root.statusProc.running) {
+          root.toggle()
+        } else {
+          root.pendingToggles = 1
+        }
       }
     }
   }
@@ -79,12 +97,16 @@ BarIndicator {
           var data = JSON.parse(text || "{}")
           root.probedOn = data.active === true
         } catch(e) {
+          console.warn("Sleepwalker: fallback status unparsable")
           root.probedOn = false
         }
       }
     }
     onExited: function(code) {
-      if (code !== 0) root.probedOn = false
+      if (code !== 0) {
+        console.warn("Sleepwalker: fallback status failed with code", code)
+        root.probedOn = false
+      }
     }
   }
 

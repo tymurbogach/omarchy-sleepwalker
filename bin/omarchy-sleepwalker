@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # omarchy-sleepwalker — keep working with lid closed
 #   omarchy-sleepwalker status [--json]
 #   omarchy-sleepwalker lid on|off|toggle
@@ -37,8 +37,13 @@ is_inhibit_active() {
 
 # After `lid on` the Service spawns the inhibitor reactively; on a fresh
 # install it may not be loaded yet. Wait briefly, then point at doctor.
+# Without logind there is nothing to wait for: warn immediately.
 wait_inhibit() {
   is_ignore_on || return 0
+  if ! command -v systemd-inhibit >/dev/null 2>&1; then
+    echo "warning: no systemd-inhibit on this host — lid cannot be inhibited" >&2
+    return 0
+  fi
   for _ in $(seq 1 12); do
     is_inhibit_active && return 0
     sleep 0.5
@@ -53,6 +58,10 @@ wait_inhibit() {
 # be held; if the live Service still thinks otherwise it respawns its own.
 reap_strays() {
   local pids
+  if ! command -v pgrep >/dev/null 2>&1; then
+    echo "warning: no pgrep — cannot reap orphaned inhibitors" >&2
+    return 0
+  fi
   # [w] trick: the pattern must not match our own command line when a
   # caller (or test) carries the literal string.
   pids=$(pgrep -f "systemd-inhibit.*--who=Omarchy Sleepwalke[r]" 2>/dev/null || true)
@@ -100,7 +109,8 @@ set_lock() {
 service_loaded() {
   # NOTE: `omarchy shell <target> <method>` is the routed form; the bare
   # `omarchy-shell shell …` variant answers "Function not found" for targets.
-  omarchy shell sleepwalker status 2>/dev/null | grep -q '"active"'
+  # Match "active":true exactly: the key alone also appears when inactive.
+  omarchy shell sleepwalker status 2>/dev/null | grep -q '"active":true'
 }
 
 cmd_status() {
@@ -177,10 +187,16 @@ USAGE
 # --- dispatch ---
 
 case "${1:-status}" in
-  status) shift || true; cmd_status "${1:-}" ;;
-  lid)    shift || true; set_lid "${1:-toggle}"; echo "lid $(is_ignore_on && echo on || echo off)"; wait_inhibit ;;
-  lock)   shift || true; set_lock "${1:-toggle}"; echo "lock-on-lid $(is_lock_on && echo on || echo off)" ;;
-  doctor) cmd_doctor ;;
+  status)
+    [[ $# -eq 1 || ( $# -eq 2 && ${2:-} == "--json" ) ]] || fail "usage: $SELF status [--json]"
+    cmd_status "${2:-}" ;;
+  lid)
+    [[ $# -le 2 && ( -z "${2:-}" || ${2:-} == "on" || ${2:-} == "off" || ${2:-} == "toggle" ) ]] || fail "usage: $SELF lid [on|off|toggle]"
+    set_lid "${2:-toggle}"; echo "lid $(is_ignore_on && echo on || echo off)"; wait_inhibit ;;
+  lock)
+    [[ $# -le 2 && ( -z "${2:-}" || ${2:-} == "on" || ${2:-} == "off" || ${2:-} == "toggle" ) ]] || fail "usage: $SELF lock [on|off|toggle]"
+    set_lock "${2:-toggle}"; echo "lock-on-lid $(is_lock_on && echo on || echo off)" ;;
+  doctor) [[ $# -eq 1 ]] || fail "usage: $SELF doctor"; cmd_doctor ;;
   -h|--help|help) usage ;;
   *) echo "unknown command: $1" >&2; usage; exit 1 ;;
 esac

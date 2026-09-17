@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # omarchy-system-lid-close — shim installed by omarchy-sleepwalker (./install.sh)
 #
 # Hyprland calls `omarchy-system-lid-close` on `switch:on:Lid Switch`
@@ -10,6 +10,9 @@
 # Installed to ~/.local/bin which sorts before /usr/share/omarchy/bin on
 # Omarchy's PATH, so this shadows the stock script without touching /usr.
 # Uninstall (./uninstall.sh) removes it.
+#
+# Argument handling matches stock exactly: the stock script takes no
+# parameters, so none are forwarded on any path.
 
 set -euo pipefail
 
@@ -22,18 +25,32 @@ LOCK_FLAG="$TOGGLES_DIR/lid-lock"
 
 ignoring() { [[ -f $IGNORE_FLAG || -f $IGNORE_FLAG_LEGACY ]]; }
 
+# Stock gone (broken system package): reconcile displays if possible, warn,
+# and report failure instead of silently succeeding.
+if [[ ! -x $REAL ]]; then
+  echo "omarchy-system-lid-close: stock script missing at $REAL" >&2
+  if [[ -x $CLAMSHELL ]]; then
+    "$CLAMSHELL" >/dev/null 2>&1
+    exit $?
+  fi
+  exit 127
+fi
+
 # If not ignoring, delegate 1:1 to stock (lock + clamshell).
 if ! ignoring; then
-  exec "$REAL" "$@"
+  exec "$REAL"
 fi
 
 # Ignoring: honour optional lock-on-lid toggle.
 if [[ -f $LOCK_FLAG ]]; then
-  exec "$REAL" "$@"
+  exec "$REAL"
 fi
 
-# Ignore + no lock → only reconcile displays, no lock.
+# Ignore + no lock → only reconcile displays, no lock. The exit code is the
+# clamshell's (like stock), never masked.
 if [[ -x $CLAMSHELL ]]; then
-  "$CLAMSHELL" >/dev/null 2>&1 || true
+  "$CLAMSHELL" >/dev/null 2>&1
+  exit $?
 fi
-exit 0
+echo "omarchy-system-lid-close: clamshell helper missing at $CLAMSHELL" >&2
+exit 1
