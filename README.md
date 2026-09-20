@@ -9,9 +9,30 @@ Listed on the [Omarchy plugin marketplace](https://plugins.omarchy.org/plugin.ht
 Needs: Omarchy 4 · a laptop with a lid switch (does nothing on desktops) ·
 `jq` recommended, not required.
 
+## Install
+
+```sh
+omarchy plugin add https://github.com/tymurbogach/omarchy-sleepwalker.git --enable --yes
+~/.config/omarchy/plugins/io.github.tymurbogach.sleepwalker/install.sh
+```
+
+- Always pass `--yes`: the entry inherits the stock strip slot.
+- The setup script adds the CLI, lid-close shim, and pinned lid binding.
+- Everything lives inside `$HOME`: no sudo, no system service.
+
+## First use
+
+```sh
+omarchy-sleepwalker lid on
+```
+
+Close the lid: the panel goes off and work continues. Click Laptop to turn it
+off again. Right-click Laptop to configure locking.
+
 ## What it does
 
-Laptops suspend when you close the lid. Sleepwalker adds a **Laptop indicator** to Omarchy's bar: left-click it and closing the lid only powers off the panel — downloads, builds, servers and SSH sessions keep running. Left-click again and you're back to stock. Right-click it to configure **Lock on close**.
+Sleepwalker adds a **Laptop** indicator to Omarchy's bar. When it is on,
+downloads, builds, servers, and SSH sessions continue with the lid closed.
 
 | Lid closed, Sleepwalker… | Result |
 |---|---|
@@ -23,106 +44,54 @@ No separate widget, no oversized icon: Sleepwalker **is** Omarchy's
 indicator strip with a 7th entry — same size, same dim-when-off, same
 hover-reveal as the other six.
 
+**Right-click Laptop → Open Lock config**
+
 ![Sleepwalker PopupCard: lock on close while work continues](docs/popupcard.png)
 
-## Quickstart
+The PopupCard shows the installed version and toggles **Lock on close**. The
+setting takes effect while Sleepwalker is on. It does not change the global
+suspend, hibernate, idle, or screensaver policy.
 
-```sh
-omarchy plugin add https://github.com/tymurbogach/omarchy-sleepwalker.git --enable --yes
-~/.config/omarchy/plugins/io.github.tymurbogach.sleepwalker/install.sh
-omarchy-sleepwalker lid on
-```
-
-Close the lid: the panel goes off, everything keeps running. The Laptop
-icon sits next to the clock, bright when on, dimmed when off.
-
-Right-click Laptop to open its compact menu. It shows the installed plugin
-version and toggles **Lock on close**. The setting takes effect while
-Sleepwalker is on. The menu does not change the system-wide lid policy.
-
-## Install
-
-```sh
-omarchy plugin add https://github.com/tymurbogach/omarchy-sleepwalker.git --enable --yes
-~/.config/omarchy/plugins/io.github.tymurbogach.sleepwalker/install.sh
-```
-
-- Always pass `--yes`: the entry inherits the stock strip slot, and the
-  section question would displace it.
-- `plugin add` brings the indicator strip with Laptop.
-- The setup script adds the CLI to `PATH`, installs the lid-close shim, and
-  pins the lid binding to the shim. It integrates, never moves: it only
-  ensures `Laptop` is in the strip's items, wherever the strip sits.
-- Everything lives inside `$HOME`: no sudo, no system service. A no-op re-run
-  touches nothing (no rescan, no restart).
-
-The inhibitor is held by the plugin's own service while the toggle is on;
-disabling or removing the plugin releases it. If the shell crashes while
-on, the orphaned handle survives: `lid off`, `doctor` and `uninstall.sh`
-reap it (see [SPEC.md](docs/SPEC.md)).
-
-## Usage
-
-Click the indicator, or run:
+## Commands
 
 | Command | What it does |
 |---|---|
-| `omarchy-sleepwalker lid on` | Keep working with the lid closed |
-| `omarchy-sleepwalker lid off` | Back to stock suspend |
-| `omarchy-sleepwalker lid toggle` | Flip it (default with no argument) |
-| `omarchy-sleepwalker lock on` | Also lock on close (default off; still no suspend) |
-| `omarchy-sleepwalker lock off` | Close without locking |
-| `omarchy-sleepwalker status` | Show lid, inhibitor and lock state |
-| `omarchy-sleepwalker status --json` | Same, as JSON |
-| `omarchy-sleepwalker doctor` | Reconcile toggle vs inhibitor, fix drift |
+| `omarchy-sleepwalker lid on` | Keep working with the lid closed. |
+| `omarchy-sleepwalker lid off` | Return to stock suspend. |
+| `omarchy-sleepwalker lid toggle` | Flip the lid setting. |
+| `omarchy-sleepwalker lock on` | Lock on close, with no suspend. |
+| `omarchy-sleepwalker lock off` | Close without locking. |
+| `omarchy-sleepwalker status` | Show lid, inhibitor, and lock state. |
+| `omarchy-sleepwalker doctor` | Reconcile the toggle and inhibitor. |
 
-Example session:
-
-```sh
-$ omarchy-sleepwalker lid on
-lid on
-$ omarchy-sleepwalker status
-lid-ignore: on
-inhibit:    active
-lock-on-lid:off
-```
-
-The toggle persists across reboots by design (it is a file, not a
-process). Warning: shelve the laptop with it on and it stays awake in
-the bag. When in doubt, `status`; `lid off` always releases.
-
-Stock idle keeps counting with the lid closed (screensaver at
-`idle.screensaver`, lock at `idle.lock`; stock defaults 150 s / 300 s) —
-that is Omarchy behavior, not controlled here.
+The lid setting persists across reboots. Do not put the laptop in a bag while
+it is on. Run `omarchy-sleepwalker lid off` before you move it.
 
 ## Configure
 
-Flip `alwaysShow` with the stock CLI:
+Keep Laptop visible when it is inactive:
 
 ```sh
 omarchy bar set io.github.tymurbogach.sleepwalker alwaysShow true
 ```
 
-For `items`, edit `~/.config/omarchy/shell.json` directly — the shell
-hot-reloads it. (Skip `omarchy bar set ... items ...`: the shell IPC
-transport mangles JSON arrays.) The installer ensures `Laptop` is present
-and never touches your order otherwise.
+For `items`, edit `~/.config/omarchy/shell.json` directly. The installer
+ensures `Laptop` is present and never changes your order.
 
-After an `omarchy update`, refresh the stock indicator copies (Laptop is untouched):
+## Update
+
+After an Omarchy update, refresh the copied stock indicators:
 
 ```sh
 ~/.config/omarchy/plugins/io.github.tymurbogach.sleepwalker/install.sh --sync-stock
 ```
 
-After every plugin update, run the scoped update and re-run the setup script:
+After a plugin update, run:
 
 ```sh
 omarchy plugin update io.github.tymurbogach.sleepwalker --yes
 ~/.config/omarchy/plugins/io.github.tymurbogach.sleepwalker/install.sh
 ```
-
-The store refreshes the plugin dir, but the CLI, shim and binding pin update
-only when the installer runs (it is idempotent).
 
 ## Remove
 
@@ -130,37 +99,24 @@ only when the installer runs (it is idempotent).
 omarchy-sleepwalker remove
 ```
 
-This is the clean removal command. It removes plugin-owned CLI files, the
-lid-close shim, the marked binding block, state files and the plugin through
-Omarchy. Lid close returns to stock suspend.
+This clean path removes the plugin, command, lid-close shim, binding block,
+and state files. Lid close then returns to stock suspend.
 
-`omarchy plugin remove io.github.tymurbogach.sleepwalker --yes` cannot run a plugin
-uninstall hook. If setup ran first and you use it directly, run
-`~/.local/bin/omarchy-sleepwalker-uninstall` afterwards to remove the external
-files that the setup script created.
+If setup ran first and you remove the plugin directly, use this recovery path:
+
+```sh
+omarchy plugin remove io.github.tymurbogach.sleepwalker --yes
+~/.local/bin/omarchy-sleepwalker-uninstall
+```
 
 ## Troubleshooting
 
-- **No Laptop icon.** Run the setup script (it ensures the entry). If it is
-  still missing, `omarchy restart shell` once.
-- **It asks for password on open.** That is `lock on`, or the shim/pin
-  missing: run `omarchy-sleepwalker doctor`.
-- **Lid still suspends.** Check `omarchy-sleepwalker status`: `lid-ignore`
-  must be on and `inhibit` active. If they disagree, `doctor` reconciles.
-- **After an update things look stale.** Re-run the setup script (see
-  Configure above); it restarts the shell only if layout or code changed.
+- **No Laptop icon.** Run the setup script, then `omarchy restart shell`.
+- **The lid still suspends.** Run `omarchy-sleepwalker doctor`.
+- **The laptop locks unexpectedly.** Run `omarchy-sleepwalker lock off`.
 
-## How it works
-
-- **Indicator:** a native stock-style entry bound reactively to the plugin
-  service, with a CLI fallback when the service is unreachable.
-- **Inhibitor:** `systemd-inhibit --what=handle-lid-switch`, held exactly
-  while the toggle is on. No daemon, user session only.
-- **No lock:** a shim plus a pinned lid binding skip the stock lock but
-  still reconcile displays.
-
-Details for reviewers and contributors: [SPEC.md](docs/SPEC.md) (contract)
-and [CONTRIBUTING.md](docs/CONTRIBUTING.md) (workflow, architecture).
+Technical details: [SPEC.md](docs/SPEC.md). Contributor workflow:
+[CONTRIBUTING.md](docs/CONTRIBUTING.md).
 
 ## License
 
