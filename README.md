@@ -14,20 +14,16 @@ Needs: Omarchy 4 · a laptop with a lid switch (does nothing on desktops) ·
 ```sh
 omarchy plugin add https://github.com/tymurbogach/omarchy-sleepwalker.git --enable --yes
 ~/.config/omarchy/plugins/io.github.tymurbogach.sleepwalker/install.sh
+omarchy-sleepwalker lid on
 ```
 
 - Always pass `--yes`: the entry inherits the stock strip slot.
 - The setup script adds the CLI, lid-close shim, and pinned lid binding.
 - Everything lives inside `$HOME`: no sudo, no system service.
 
-## First use
-
-```sh
-omarchy-sleepwalker lid on
-```
-
-Close the lid: the panel goes off and work continues. Click Laptop to turn it
-off again. Right-click Laptop to configure locking.
+The final command enables Sleepwalker. Close the lid: the panel goes off and
+work continues. Click Laptop to turn it off again. Right-click Laptop to
+configure locking.
 
 ## What it does
 
