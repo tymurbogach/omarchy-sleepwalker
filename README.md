@@ -1,14 +1,44 @@
-# Sleepwalker
+# Omarchy Sleepwalker
 
-**Close the lid. Keep working.**
+Close your laptop and keep working. One click, no suspend, lock optional.
 
-![Sleepwalker PopupCard in the Omarchy bar](preview.png)
+![Sleepwalker: close the lid and keep working, with the native Laptop indicator in the Omarchy bar](preview.png)
 
-`v0.3.5` · Omarchy 4+ · Laptop with a lid switch
+Listed on the [Omarchy plugin marketplace](https://plugins.omarchy.org/plugin.html?id=io.github.tymurbogach.sleepwalker).
 
-Sleepwalker adds one native **Laptop** indicator to the Omarchy bar. It keeps
-your session running when you close the lid. Right-click it to lock the
-session without stopping your work.
+Needs: Omarchy 4 · a laptop with a lid switch (does nothing on desktops) ·
+`jq` recommended, not required.
+
+## What it does
+
+Laptops suspend when you close the lid. Sleepwalker adds a **Laptop indicator** to Omarchy's bar: left-click it and closing the lid only powers off the panel — downloads, builds, servers and SSH sessions keep running. Left-click again and you're back to stock. Right-click it to configure locking on lid close.
+
+| Lid closed, Sleepwalker… | Result |
+|---|---|
+| **ON** | Panel off. No suspend, no hibernate, no lock. Keeps working. |
+| **OFF** (stock) | Suspend (+ lock unless docked). |
+| **ON + lock** (`lock on`) | Panel off + locked. Still no suspend. |
+
+No separate widget, no oversized icon: Sleepwalker **is** Omarchy's
+indicator strip with a 7th entry — same size, same dim-when-off, same
+hover-reveal as the other six.
+
+![Sleepwalker PopupCard: lock on close while work continues](docs/popupcard.png)
+
+## Quickstart
+
+```sh
+omarchy plugin add https://github.com/tymurbogach/omarchy-sleepwalker.git --enable --yes
+~/.config/omarchy/plugins/io.github.tymurbogach.sleepwalker/install.sh
+omarchy-sleepwalker lid on
+```
+
+Close the lid: the panel goes off, everything keeps running. The Laptop
+icon sits next to the clock, bright when on, dimmed when off.
+
+Right-click Laptop to open its compact menu. It shows the installed plugin
+version and toggles **Lock on close**. The setting takes effect while
+Sleepwalker is on. The menu does not change the system-wide lid policy.
 
 ## Install
 
@@ -17,65 +47,76 @@ omarchy plugin add https://github.com/tymurbogach/omarchy-sleepwalker.git --enab
 ~/.config/omarchy/plugins/io.github.tymurbogach.sleepwalker/install.sh
 ```
 
-The first command installs the native indicator. The second command adds the
-terminal command and the safe lid-close integration. It writes only inside
-your home directory. It does not need `sudo`.
+- Always pass `--yes`: the entry inherits the stock strip slot, and the
+  section question would displace it.
+- `plugin add` brings the indicator strip with Laptop.
+- The setup script adds the CLI to `PATH`, installs the lid-close shim, and
+  pins the lid binding to the shim. It integrates, never moves: it only
+  ensures `Laptop` is in the strip's items, wherever the strip sits.
+- Everything lives inside `$HOME`: no sudo, no services. A no-op re-run
+  touches nothing (no rescan, no restart).
 
-## Use
+The inhibitor is held by the plugin's own service while the toggle is on;
+disabling or removing the plugin releases it. If the shell crashes while
+on, the orphaned handle survives: `lid off`, `doctor` and `uninstall.sh`
+reap it (see [SPEC.md](docs/SPEC.md)).
 
-| Action | Result |
+## Usage
+
+Click the indicator, or run:
+
+| Command | What it does |
 |---|---|
-| Left-click **Laptop** | Toggle lid protection on or off. |
-| Right-click **Laptop** | Open the compact **Lock on close** control. |
-| `omarchy-sleepwalker lid on` | Keep working after you close the lid. |
-| `omarchy-sleepwalker lid off` | Return to normal suspend behavior. |
-| `omarchy-sleepwalker lock on` | Lock the session and keep working closed. |
-| `omarchy-sleepwalker status` | Show the current state. |
+| `omarchy-sleepwalker lid on` | Keep working with the lid closed |
+| `omarchy-sleepwalker lid off` | Back to stock suspend |
+| `omarchy-sleepwalker lid toggle` | Flip it (default with no argument) |
+| `omarchy-sleepwalker lock on` | Also lock on close (default off; still no suspend) |
+| `omarchy-sleepwalker lock off` | Close without locking |
+| `omarchy-sleepwalker status` | Show lid, inhibitor and lock state |
+| `omarchy-sleepwalker status --json` | Same, as JSON |
+| `omarchy-sleepwalker doctor` | Reconcile toggle vs inhibitor, fix drift |
 
-When Sleepwalker is on, closing the lid turns the panel off. Your downloads,
-builds, servers, and SSH sessions continue. When it is off, Omarchy uses its
-normal lid behavior.
-
-The PopupCard shows the plugin version and one clear option:
-
-- **Lock on close** locks the session while the laptop still works closed.
-
-## Important
-
-Sleepwalker keeps the laptop awake while the lid is closed. Do not put it in a
-bag while it is on. Run this command before you move the laptop:
+Example session:
 
 ```sh
-omarchy-sleepwalker lid off
+$ omarchy-sleepwalker lid on
+lid on
+$ omarchy-sleepwalker status
+lid-ignore: on
+inhibit:    active
+lock-on-lid:off
 ```
 
-The lid setting persists across reboots. This is intentional.
+The toggle persists across reboots by design (it is a file, not a
+process). Warning: shelve the laptop with it on and it stays awake in
+the bag. When in doubt, `status`; `lid off` always releases.
+
+Stock idle keeps counting with the lid closed (screensaver at
+`idle.screensaver`, lock at `idle.lock`; stock defaults 150 s / 300 s) —
+that is Omarchy behavior, not controlled here.
 
 ## Configure
 
-By default, inactive indicators appear when you hover the bar. To keep
-Laptop visible all the time:
+Flip `alwaysShow` with the stock CLI:
 
 ```sh
 omarchy bar set io.github.tymurbogach.sleepwalker alwaysShow true
 ```
 
-The popup changes only Sleepwalker's lock-on-close setting. It does not change
-the global suspend, hibernate, idle, or screensaver policy.
+For `items`, edit `~/.config/omarchy/shell.json` directly — the shell
+hot-reloads it. (Skip `omarchy bar set ... items ...`: the shell IPC
+transport mangles JSON arrays.) The installer ensures `Laptop` is present
+and never touches your order otherwise.
 
-## Update
-
-After `omarchy plugin update`, run the installed setup script again:
-
-```sh
-~/.config/omarchy/plugins/io.github.tymurbogach.sleepwalker/install.sh
-```
-
-After an Omarchy update, refresh the copied stock indicators too:
+After an `omarchy update`, refresh the stock indicator copies (Laptop is untouched):
 
 ```sh
 ~/.config/omarchy/plugins/io.github.tymurbogach.sleepwalker/install.sh --sync-stock
 ```
+
+After every plugin update (`omarchy plugin update`), re-run the setup script
+— the store refreshes the plugin dir, but the CLI, shim and binding pin
+only update when the installer runs (it is idempotent).
 
 ## Remove
 
@@ -83,28 +124,38 @@ After an Omarchy update, refresh the copied stock indicators too:
 omarchy-sleepwalker remove
 ```
 
-This is the clean removal path. It removes the plugin, command, lid-close
-shim, binding block, and state files. Lid close then returns to normal suspend.
+This is the clean removal command. It removes plugin-owned CLI files, the
+lid-close shim, the marked binding block, state files and the plugin through
+Omarchy. Lid close returns to stock suspend.
 
-If you ran the setup script and then remove the plugin directly with
-`omarchy plugin remove io.github.tymurbogach.sleepwalker`, run this afterwards
-to remove the external files created during setup:
+`omarchy plugin remove io.github.tymurbogach.sleepwalker` cannot run a plugin
+uninstall hook. If setup ran first and you use it directly, run
+`~/.local/bin/omarchy-sleepwalker-uninstall` afterwards to remove the external
+files that `./install.sh` created.
 
-```sh
-~/.local/bin/omarchy-sleepwalker-uninstall
-```
+## Troubleshooting
 
-## Help
+- **No Laptop icon.** Run the setup script (it ensures the entry). If it is
+  still missing, `omarchy restart shell` once.
+- **It asks for password on open.** That is `lock on`, or the shim/pin
+  missing: run `omarchy-sleepwalker doctor`.
+- **Lid still suspends.** Check `omarchy-sleepwalker status`: `lid-ignore`
+  must be on and `inhibit` active. If they disagree, `doctor` reconciles.
+- **After an update things look stale.** Re-run the setup script (see
+  Configure above); it restarts the shell only if layout or code changed.
 
-| Problem | Fix |
-|---|---|
-| Laptop is missing | Run the installed setup script, then `omarchy restart shell`. |
-| The lid still suspends | Run `omarchy-sleepwalker doctor`. |
-| The laptop locks unexpectedly | Run `omarchy-sleepwalker lock off`. |
+## How it works
 
-Technical details: [SPEC.md](docs/SPEC.md). Contributor workflow:
-[CONTRIBUTING.md](docs/CONTRIBUTING.md).
+- **Indicator:** a native stock-style entry bound reactively to the plugin
+  service, with a CLI fallback when the service is unreachable.
+- **Inhibitor:** `systemd-inhibit --what=handle-lid-switch`, held exactly
+  while the toggle is on. No daemon, user session only.
+- **No lock:** a shim plus a pinned lid binding skip the stock lock but
+  still reconcile displays.
+
+Details for reviewers and contributors: [SPEC.md](docs/SPEC.md) (contract)
+and [CONTRIBUTING.md](docs/CONTRIBUTING.md) (workflow, architecture).
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).
