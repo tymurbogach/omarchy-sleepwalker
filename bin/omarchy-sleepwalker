@@ -176,7 +176,7 @@ cmd_doctor() {
 
 cmd_remove() {
   local uninstaller="$HOME/.local/bin/${SELF}-uninstall"
-  [[ -x $uninstaller ]] || fail "clean removal needs $uninstaller — run ./install.sh first"
+  [[ -x $uninstaller ]] || fail "clean removal needs $uninstaller — run the installed setup script first"
   "$uninstaller" --remove-plugin
 }
 

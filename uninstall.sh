@@ -207,7 +207,7 @@ else
   Removed (CLI, shim, toggles, legacy).
   Lid close is back to stock: suspend.
 
-  For a full clean removal next time, run before direct plugin removal:
-    omarchy-sleepwalker remove
+  To also remove the bar indicator now:
+    omarchy plugin remove $ID
 EOF
 fi
