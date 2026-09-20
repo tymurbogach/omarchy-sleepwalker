@@ -1,10 +1,23 @@
 #!/usr/bin/env bash
 # Undoes what install.sh did (CLI + shim + legacy), and clears toggles.
-# The plugin itself is removed with: omarchy plugin remove <id>
-# (that restores the built-in indicators strip in place, by itself).
-#   ./uninstall.sh
+#   ./uninstall.sh                 keep the installed plugin directory
+#   ./uninstall.sh --remove-plugin remove it after external cleanup
 set -uo pipefail
 export LC_ALL=C  # stable grep/sort classes regardless of user locale
+
+REMOVE_PLUGIN=false
+case "${1:-}" in
+  "") ;;
+  --remove-plugin) REMOVE_PLUGIN=true ;;
+  -h|--help|help)
+    echo "Usage: $(basename "$0") [--remove-plugin]"
+    exit 0
+    ;;
+  *)
+    echo "usage: $(basename "$0") [--remove-plugin]" >&2
+    exit 2
+    ;;
+esac
 
 ID="io.github.tymurbogach.sleepwalker"
 OLD_ID="io.github.tymurbogach.lid"
@@ -181,10 +194,20 @@ else
   echo "· layout unchanged — shell untouched"
 fi
 
-cat <<EOF
+if $REMOVE_PLUGIN; then
+  if [[ -e $PLUGINS_DIR/$ID || -L $PLUGINS_DIR/$ID ]]; then
+    echo "· removing plugin through Omarchy"
+    omarchy plugin remove "$ID" --yes
+  else
+    echo "· plugin directory already absent"
+  fi
+  echo "  Removed (plugin, CLI, shim, toggles, legacy)."
+else
+  cat <<EOF
   Removed (CLI, shim, toggles, legacy).
   Lid close is back to stock: suspend.
 
-  To also remove the bar indicator itself:
-    omarchy plugin remove $ID
+  For a full clean removal next time, run before direct plugin removal:
+    omarchy-sleepwalker remove
 EOF
+fi

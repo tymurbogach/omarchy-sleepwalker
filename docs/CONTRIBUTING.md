@@ -25,6 +25,10 @@ omarchy plugin add . --enable --yes
 omarchy-restart-shell                  # the only reliable QML reload
 ```
 
+`omarchy plugin add .` clones the committed Git revision. Before a development
+cycle with uncommitted runtime changes, copy those files into the installed
+plugin directory after `plugin add`, or commit them first.
+
 Then verify a cold start by hand: the bar renders, a click toggles the
 indicator, a lid close behaves, `omarchy plugin list --json` shows the plugin,
 and disable, enable, restart and remove all work cleanly.
@@ -106,9 +110,13 @@ user edits elsewhere in the file always survive install and uninstall.
   the like). The complete checkout becomes the plugin payload, and the
   marketplace review rejects files that steer coding agents. Contributor
   notes live here, in `docs/`.
-- Zero residue on remove: `uninstall.sh` leaves no files, caches or stray
-  `shell.json` entries behind, and removes only the files that it can verify
-  as its own (see the `ours()` check in `uninstall.sh`). Safety backups
+- Zero residue on the clean path: `omarchy-sleepwalker remove` runs the
+  installed uninstaller, then calls `omarchy plugin remove`. Direct
+  `omarchy plugin remove` cannot execute an uninstall hook. Run the remaining
+  `~/.local/bin/omarchy-sleepwalker-uninstall` after that direct removal.
+  The uninstaller leaves no owned files, caches or stray `shell.json` entries
+  behind, and removes only files that it can verify as its own (see the
+  `ours()` check in `uninstall.sh`). Safety backups
   (`*.bak.*` beside the edited file) are capped at the newest 3 by
   `prune_backups` in both scripts.
 - Commits: English, imperative, one concern per commit, authored by the

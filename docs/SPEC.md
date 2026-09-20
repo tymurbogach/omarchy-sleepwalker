@@ -21,6 +21,25 @@ Writers: `Service.qml` (serialized `bash -c`), CLI (`lid`/`lock`).
 
 The toggle persists across reboots by design (see README warning).
 
+## 1.1 Laptop menu
+
+Right-clicking Laptop opens a `PopupCard` anchored to the indicator. It reads
+the name and version from the bundled manifest, and changes only `lid-lock`.
+Left-click keeps its existing lid-toggle behavior. The menu never writes
+`shell.json`, `/etc`, or a systemd policy.
+
+When `Service.qml` is live, the menu calls `setLock()` directly. Otherwise it
+uses the bundled CLI fallback, with lid and lock writes serialized in order.
+
+## 1.2 Removal
+
+`omarchy-sleepwalker remove` runs the installed uninstaller with
+`--remove-plugin`. It removes plugin-owned external files before it asks
+Omarchy to remove the plugin directory. Omarchy has no plugin uninstall hook,
+so direct `omarchy plugin remove` cannot clean those external files. The
+installed `omarchy-sleepwalker-uninstall` remains available for that recovery
+path.
+
 ## 2. Inhibitor ownership
 
 Exactly one handle per live service: child

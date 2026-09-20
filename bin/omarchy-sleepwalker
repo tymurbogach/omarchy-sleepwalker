@@ -4,6 +4,7 @@
 #   omarchy-sleepwalker lid on|off|toggle
 #   omarchy-sleepwalker lock on|off|toggle
 #   omarchy-sleepwalker doctor
+#   omarchy-sleepwalker remove
 #
 # State (single source of truth, shared with Service.qml + Laptop indicator):
 #   ~/.local/state/omarchy/toggles/sleepwalker — presence = lid-ignore on (preferred)
@@ -173,6 +174,12 @@ cmd_doctor() {
   echo "· ok"
 }
 
+cmd_remove() {
+  local uninstaller="$HOME/.local/bin/${SELF}-uninstall"
+  [[ -x $uninstaller ]] || fail "clean removal needs $uninstaller — run ./install.sh first"
+  "$uninstaller" --remove-plugin
+}
+
 usage() {
   cat <<USAGE
 Usage: $SELF <command> [args]
@@ -181,6 +188,7 @@ Usage: $SELF <command> [args]
   lid on|off|toggle        inhibit lid suspend (keep working closed)
   lock on|off|toggle       lock on lid close when lid-ignore is on (default off)
   doctor                   reconcile toggle vs inhibitor, drop legacy units
+  remove                   remove plugin-owned files, then remove the plugin
 USAGE
 }
 
@@ -197,6 +205,7 @@ case "${1:-status}" in
     [[ $# -le 2 && ( -z "${2:-}" || ${2:-} == "on" || ${2:-} == "off" || ${2:-} == "toggle" ) ]] || fail "usage: $SELF lock [on|off|toggle]"
     set_lock "${2:-toggle}"; echo "lock-on-lid $(is_lock_on && echo on || echo off)" ;;
   doctor) [[ $# -eq 1 ]] || fail "usage: $SELF doctor"; cmd_doctor ;;
+  remove) [[ $# -eq 1 ]] || fail "usage: $SELF remove"; cmd_remove ;;
   -h|--help|help) usage ;;
   *) echo "unknown command: $1" >&2; usage; exit 1 ;;
 esac

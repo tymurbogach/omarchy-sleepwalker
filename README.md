@@ -11,7 +11,7 @@ Needs: Omarchy 4 · a laptop with a lid switch (does nothing on desktops) ·
 
 ## What it does
 
-Laptops suspend when you close the lid. Sleepwalker adds a **Laptop indicator** to Omarchy's bar: click it and closing the lid only powers off the panel — downloads, builds, servers and SSH sessions keep running. Click again and you're back to stock.
+Laptops suspend when you close the lid. Sleepwalker adds a **Laptop indicator** to Omarchy's bar: left-click it and closing the lid only powers off the panel — downloads, builds, servers and SSH sessions keep running. Left-click again and you're back to stock. Right-click it to configure locking on lid close.
 
 | Lid closed, Sleepwalker… | Result |
 |---|---|
@@ -21,10 +21,7 @@ Laptops suspend when you close the lid. Sleepwalker adds a **Laptop indicator** 
 
 No separate widget, no oversized icon: Sleepwalker **is** Omarchy's
 indicator strip with a 7th entry — same size, same dim-when-off, same
-hover-reveal as the other six.
-
-![Laptop indicator on, bright next to the clock](docs/bar-on.png)
-![Laptop indicator off, dimmed among the rest](docs/bar-off.png)
+hover-reveal as the other six. The preview shows its compact PopupCard.
 
 ## Quickstart
 
@@ -36,6 +33,10 @@ omarchy-sleepwalker lid on
 
 Close the lid: the panel goes off, everything keeps running. The Laptop
 icon sits next to the clock, bright when on, dimmed when off.
+
+Right-click Laptop to open its compact menu. It shows the installed plugin
+version and toggles **Lock on lid close**. The setting takes effect while
+Sleepwalker is on. The menu does not change the system-wide lid policy.
 
 ## Install
 
@@ -118,11 +119,17 @@ only update when the installer runs (it is idempotent).
 ## Remove
 
 ```sh
-./uninstall.sh
-omarchy plugin remove io.github.tymurbogach.sleepwalker
+omarchy-sleepwalker remove
 ```
 
-In this order the restored built-in strip comes back clean. Lid close returns to stock suspend.
+This is the clean removal command. It removes plugin-owned CLI files, the
+lid-close shim, the marked binding block, state files and the plugin through
+Omarchy. Lid close returns to stock suspend.
+
+`omarchy plugin remove io.github.tymurbogach.sleepwalker` cannot run a plugin
+uninstall hook. If you use it directly, run
+`~/.local/bin/omarchy-sleepwalker-uninstall` afterwards to remove the external
+files that `./install.sh` created.
 
 ## Troubleshooting
 
