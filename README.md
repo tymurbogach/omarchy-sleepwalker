@@ -11,7 +11,7 @@ Needs: Omarchy 4 · a laptop with a lid switch (does nothing on desktops) ·
 
 ## What it does
 
-Laptops suspend when you close the lid. Sleepwalker adds a **Laptop indicator** to Omarchy's bar: left-click it and closing the lid only powers off the panel — downloads, builds, servers and SSH sessions keep running. Left-click again and you're back to stock. Right-click it to configure locking on lid close.
+Laptops suspend when you close the lid. Sleepwalker adds a **Laptop indicator** to Omarchy's bar: left-click it and closing the lid only powers off the panel — downloads, builds, servers and SSH sessions keep running. Left-click again and you're back to stock. Right-click it to configure **Lock on close**.
 
 | Lid closed, Sleepwalker… | Result |
 |---|---|
@@ -53,7 +53,7 @@ omarchy plugin add https://github.com/tymurbogach/omarchy-sleepwalker.git --enab
 - The setup script adds the CLI to `PATH`, installs the lid-close shim, and
   pins the lid binding to the shim. It integrates, never moves: it only
   ensures `Laptop` is in the strip's items, wherever the strip sits.
-- Everything lives inside `$HOME`: no sudo, no services. A no-op re-run
+- Everything lives inside `$HOME`: no sudo, no system service. A no-op re-run
   touches nothing (no rescan, no restart).
 
 The inhibitor is held by the plugin's own service while the toggle is on;
@@ -114,9 +114,15 @@ After an `omarchy update`, refresh the stock indicator copies (Laptop is untouch
 ~/.config/omarchy/plugins/io.github.tymurbogach.sleepwalker/install.sh --sync-stock
 ```
 
-After every plugin update (`omarchy plugin update`), re-run the setup script
-— the store refreshes the plugin dir, but the CLI, shim and binding pin
-only update when the installer runs (it is idempotent).
+After every plugin update, run the scoped update and re-run the setup script:
+
+```sh
+omarchy plugin update io.github.tymurbogach.sleepwalker --yes
+~/.config/omarchy/plugins/io.github.tymurbogach.sleepwalker/install.sh
+```
+
+The store refreshes the plugin dir, but the CLI, shim and binding pin update
+only when the installer runs (it is idempotent).
 
 ## Remove
 
@@ -128,10 +134,10 @@ This is the clean removal command. It removes plugin-owned CLI files, the
 lid-close shim, the marked binding block, state files and the plugin through
 Omarchy. Lid close returns to stock suspend.
 
-`omarchy plugin remove io.github.tymurbogach.sleepwalker` cannot run a plugin
+`omarchy plugin remove io.github.tymurbogach.sleepwalker --yes` cannot run a plugin
 uninstall hook. If setup ran first and you use it directly, run
 `~/.local/bin/omarchy-sleepwalker-uninstall` afterwards to remove the external
-files that `./install.sh` created.
+files that the setup script created.
 
 ## Troubleshooting
 

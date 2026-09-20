@@ -17,12 +17,17 @@ bash scripts. After a substantial change, run this verification:
 omarchy plugin validate .
 qmllint -I "$OMARCHY_PATH/shell" <changed .qml files>
 
-# from-zero reinstall cycle
-omarchy plugin disable io.github.tymurbogach.sleepwalker
-omarchy plugin remove  io.github.tymurbogach.sleepwalker --yes
-ls ~/.config/omarchy/plugins/io.github.tymurbogach.sleepwalker/   # MUST NOT exist
+# from-zero reinstall cycle (clean external files before plugin removal)
+if command -v omarchy-sleepwalker >/dev/null; then
+  omarchy-sleepwalker remove
+else
+  omarchy plugin remove io.github.tymurbogach.sleepwalker --yes
+  test ! -x ~/.local/bin/omarchy-sleepwalker-uninstall || \
+    ~/.local/bin/omarchy-sleepwalker-uninstall
+fi
+test ! -e ~/.config/omarchy/plugins/io.github.tymurbogach.sleepwalker/
 omarchy plugin add . --enable --yes
-omarchy-restart-shell                  # the only reliable QML reload
+omarchy restart shell                  # the only reliable QML reload
 ```
 
 `omarchy plugin add .` clones the committed Git revision. Before a development
@@ -35,7 +40,7 @@ and disable, enable, restart and remove all work cleanly.
 
 For fast local iteration without a full reinstall, copy the repository into
 `~/.config/omarchy/plugins/io.github.tymurbogach.sleepwalker/`. Then run
-`omarchy-shell shell rescanPlugins` and `omarchy-restart-shell`.
+`omarchy shell shell rescanPlugins` and `omarchy restart shell`.
 
 After an Omarchy update, refresh the clone of the stock indicators:
 
