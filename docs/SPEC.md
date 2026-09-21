@@ -21,15 +21,14 @@ Writers: `Service.qml` (serialized `bash -c`), CLI (`lid`/`lock`).
 
 The toggle persists across reboots by design (see README warning).
 
-## 1.1 Laptop menu
+## 1.1 Laptop controls
 
-Right-clicking Laptop opens a `PopupCard` anchored to the indicator. It reads
-the name and version from the bundled manifest, and changes only `lid-lock`.
-Left-click keeps its existing lid-toggle behavior. The menu never writes
-`shell.json`, `/etc`, or a systemd policy.
+Left-clicking Laptop changes only the lid-ignore state. Right-clicking Laptop
+changes only `lid-lock`. Neither control writes `shell.json`, `/etc`, or a
+systemd policy.
 
-When `Service.qml` is live, the menu calls `setLock()` directly. Otherwise it
-uses the bundled CLI fallback, with lid and lock writes serialized in order.
+When `Service.qml` is live, right-click calls `setLock()` directly. Otherwise
+it uses the bundled CLI fallback, with lid and lock writes serialized in order.
 
 ## 1.2 Removal
 

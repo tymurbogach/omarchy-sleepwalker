@@ -68,10 +68,11 @@ Three moving parts, one shared state directory, no polling:
   `Laptop` added to `defaultIndicatorEntries`, and the stock `IpcHandler`
   removed to avoid a handler collision warning against the disabled built-in.
   **Never hand-edit this file.** Always regenerate it.
-- **`indicators/Laptop.qml`** is the new indicator. It binds to `Service.qml`
-  through `bar.shell.serviceFor("io.github.tymurbogach.sleepwalker")` when
-  that is available. When the service is unreachable, it falls back to the
-  bundled CLI (`bin/omarchy-sleepwalker`, resolved relative to the plugin,
+- **`indicators/Laptop.qml`** is the new indicator. Left-click changes the
+  lid-ignore state. Right-click changes the lock-on-close state. It binds to
+  `Service.qml` through `bar.shell.serviceFor("io.github.tymurbogach.sleepwalker")`
+  when that is available. When the service is unreachable, it falls back to
+  the bundled CLI (`bin/omarchy-sleepwalker`, resolved relative to the plugin,
   never through `PATH`) plus a 30 s poll.
   `indicators/{Dictation,Dnd,NightLight,Reminder,ScreenRecording,StayAwake}.qml`
   are verbatim copies of the stock indicators, which `--sync-stock` also

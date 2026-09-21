@@ -25,12 +25,9 @@ BarIndicator {
   // the CLI bundled in this plugin, resolved relative to this file — never
   // looked up on PATH, because `omarchy plugin add` runs no install hook.
   readonly property string fallbackCli: decodeURIComponent(String(Qt.resolvedUrl("../bin/omarchy-sleepwalker")).replace(/^file:\/\//, ""))
-  readonly property string manifestPath: decodeURIComponent(String(Qt.resolvedUrl("../manifest.json")).replace(/^file:\/\//, ""))
 
   property bool probedOn: false
   property bool probedLockOn: false
-  property string pluginName: "Sleepwalker"
-  property string pluginVersion: ""
   property var fallbackActions: []
 
   active: svcAvailable ? (sleepService.lidOn === true) : probedOn
@@ -39,8 +36,22 @@ BarIndicator {
   // FA laptop mono-glyph — with chassis, same height/centering as others
   activeText: ""
   inactiveText: ""
-  activeTooltipText: "Laptop ON — lid closed keeps working (click to turn off; right-click to configure)"
-  inactiveTooltipText: "Laptop OFF — system lid policy applies (click to turn on; right-click to configure)"
+  activeTooltipText: lockOnLid
+    ? "Working ON. Lock  ON. Right-click: switch lock off."
+    : "Working ON. Lock  OFF. Right-click: switch lock on."
+  inactiveTooltipText: lockOnLid
+    ? "Working OFF. Lock  ON. Right-click: switch lock off."
+    : "Working OFF. Lock  OFF. Right-click: switch lock on."
+  // Keep the inactive slot interactive while the pointer remains over it.
+  // A left-click can turn the indicator off under that same pointer.
+  maintainIndicatorReveal: true
+
+  function refreshTooltip() {
+    Qt.callLater(function() {
+      if (root.bar && root.tooltipHovered)
+        root.bar.showTooltip(root, root.tooltipText)
+    })
+  }
 
   function toggle() {
     if (svcAvailable && typeof sleepService.toggleLid === "function") {
@@ -97,18 +108,8 @@ BarIndicator {
     statusProc.running = true
   }
 
-  function toggleMenu() {
-    if (bar) bar.hideTooltip(root)
-    menuOpen = !menuOpen
-  }
-
-  // PopupCard delegates outside-click dismissal to its owner when available.
-  function close() {
-    menuOpen = false
-  }
-
-  property bool menuOpen: false
-
+  onActiveChanged: refreshTooltip()
+  onLockOnLidChanged: refreshTooltip()
   onBarChanged: refresh()
   Component.onCompleted: refresh()
 
@@ -116,21 +117,6 @@ BarIndicator {
     target: root.indicatorHost
     ignoreUnknownSignals: true
     function onRefreshRequested() { root.refresh() }
-  }
-
-  FileView {
-    path: root.manifestPath
-    watchChanges: false
-    printErrors: false
-    onLoaded: {
-      try {
-        var manifest = JSON.parse(text() || "{}")
-        if (typeof manifest.name === "string" && manifest.name !== "") root.pluginName = manifest.name
-        if (typeof manifest.version === "string") root.pluginVersion = manifest.version
-      } catch (e) {
-        console.warn("Sleepwalker: manifest is not valid JSON")
-      }
-    }
   }
 
   Process {
@@ -175,104 +161,12 @@ BarIndicator {
     }
   }
 
-  PopupCard {
-    id: menu
-    anchorItem: root
-    owner: root
-    bar: root.bar
-    open: root.menuOpen
-    contentWidth: menu.fittedContentWidth(Style.space(280))
-    contentHeight: menu.fittedContentHeight(menuColumn.implicitHeight)
-
-    Column {
-      id: menuColumn
-      anchors.fill: parent
-      spacing: Style.space(8)
-
-      Row {
-        width: parent.width
-        spacing: Style.space(6)
-
-        Text {
-          textFormat: Text.PlainText
-          text: root.pluginName
-          color: root.foreground
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.subtitle
-          font.bold: true
-        }
-
-        Text {
-          visible: root.pluginVersion !== ""
-          anchors.verticalCenter: parent.verticalCenter
-          textFormat: Text.PlainText
-          text: "v" + root.pluginVersion
-          color: Qt.darker(root.foreground, 1.45)
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.caption
-        }
-      }
-
-      Item {
-        width: parent.width
-        implicitHeight: Math.max(lockCopy.implicitHeight, lockSwitch.implicitHeight)
-
-        Row {
-          anchors.fill: parent
-          spacing: Style.space(12)
-
-          Column {
-            id: lockCopy
-            width: parent.width - lockSwitch.implicitWidth - parent.spacing
-            spacing: Style.space(2)
-            anchors.verticalCenter: parent.verticalCenter
-
-            Text {
-              textFormat: Text.PlainText
-              text: "Lock on close "
-              color: root.foreground
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.subtitle
-              font.bold: true
-            }
-
-            Text {
-              textFormat: Text.PlainText
-              text: root.active
-                ? "Still works when closed."
-                : "Still works when enabled."
-              color: Qt.darker(root.foreground, 1.5)
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-              wrapMode: Text.WordWrap
-              width: parent.width
-            }
-          }
-
-          ToggleSwitch {
-            id: lockSwitch
-            checked: root.lockOnLid
-            foreground: root.foreground
-            interactive: false
-            anchors.verticalCenter: parent.verticalCenter
-          }
-        }
-
-        MouseArea {
-          anchors.fill: parent
-          cursorShape: Qt.PointingHandCursor
-          onClicked: root.setLock(!root.lockOnLid)
-        }
-      }
-    }
-  }
-
   Timer { id: settle; interval: 300; repeat: false; onTriggered: root.refresh() }
   // Fallback poll only — the service path is push-based and needs none.
   Timer { interval: 30000; running: !root.svcAvailable; repeat: true; onTriggered: root.refresh() }
 
   onPressed: function(button) {
-    if (button === Qt.RightButton) root.toggleMenu()
+    if (button === Qt.RightButton) root.setLock(!root.lockOnLid)
     else if (button === Qt.LeftButton) root.toggle()
   }
 }

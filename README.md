@@ -23,7 +23,7 @@ omarchy-sleepwalker lid on
 
 The final command enables Sleepwalker. Close the lid: the panel goes off and
 work continues. Click Laptop to turn it off again. Right-click Laptop to
-configure locking.
+switch Lock on close on or off.
 
 ## What it does
 
@@ -40,13 +40,9 @@ No separate widget, no oversized icon: Sleepwalker **is** Omarchy's
 indicator strip with a 7th entry — same size, same dim-when-off, same
 hover-reveal as the other six.
 
-**Right-click Laptop → Open Lock config**
-
-![Sleepwalker PopupCard: lock on close while work continues](docs/popupcard.png)
-
-The PopupCard shows the installed version and toggles **Lock on close**. The
-setting takes effect while Sleepwalker is on. It does not change the global
-suspend, hibernate, idle, or screensaver policy.
+> **Right-click Laptop to switch Lock on close on or off.** This setting
+> takes effect while Sleepwalker is on. It does not change the global suspend,
+> hibernate, idle, or screensaver policy.
 
 ## Commands
 
