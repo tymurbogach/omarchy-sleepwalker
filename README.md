@@ -11,12 +11,12 @@ Needs: Omarchy 4 · a laptop with a lid switch (does nothing on desktops) ·
 
 ## Controls
 
-> **Right-click Laptop: switch Lock  ON or OFF.** Working does not change.
+> **Right-click Laptop: switch Lock 🔒 ON or OFF.** Working does not change.
 
 | Input | Action |
 |---|---|
 | **Left-click Laptop** | Switch Working ON or OFF. |
-| **Right-click Laptop** | Switch Lock  ON or OFF. When ON, opening the lid requires your password. |
+| **Right-click Laptop** | Switch Lock 🔒 ON or OFF. When ON, opening the lid requires your password. |
 
 ## Install
 
@@ -38,7 +38,7 @@ continues.
 Sleepwalker adds a **Laptop** indicator to Omarchy's bar. When it is on,
 downloads, builds, servers, and SSH sessions continue with the lid closed.
 
-| Working | Lock  | Result when you close the lid |
+| Working | Lock 🔒 | Result when you close the lid |
 |---|---|---|
 | **ON** | **OFF** | Panel off. No suspend, no hibernate, no lock. Keeps working. |
 | **ON** | **ON** | Panel off and locked. Work continues. Opening the lid requires your password. |
