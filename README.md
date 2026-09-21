@@ -9,6 +9,15 @@ Listed on the [Omarchy plugin marketplace](https://plugins.omarchy.org/plugin.ht
 Needs: Omarchy 4 · a laptop with a lid switch (does nothing on desktops) ·
 `jq` recommended, not required.
 
+## Controls
+
+> **Right-click Laptop: switch Lock  ON or OFF.** Working does not change.
+
+| Input | Action |
+|---|---|
+| **Left-click Laptop** | Switch Working ON or OFF. |
+| **Right-click Laptop** | Switch Lock  ON or OFF. When ON, opening the lid requires your password. |
+
 ## Install
 
 ```sh
@@ -21,28 +30,26 @@ omarchy-sleepwalker lid on
 - The setup script adds the CLI, lid-close shim, and pinned lid binding.
 - Everything lives inside `$HOME`: no sudo, no system service.
 
-The final command enables Sleepwalker. Close the lid: the panel goes off and
-work continues. Click Laptop to turn it off again. Right-click Laptop to
-switch Lock on close on or off.
+The final command enables Working. Close the lid: the panel goes off and work
+continues.
 
 ## What it does
 
 Sleepwalker adds a **Laptop** indicator to Omarchy's bar. When it is on,
 downloads, builds, servers, and SSH sessions continue with the lid closed.
 
-| Lid closed, Sleepwalker… | Result |
-|---|---|
-| **ON** | Panel off. No suspend, no hibernate, no lock. Keeps working. |
-| **OFF** (stock) | Suspend (+ lock unless docked). |
-| **ON + lock** (`lock on`) | Panel off + locked. Still no suspend. |
+| Working | Lock  | Result when you close the lid |
+|---|---|---|
+| **ON** | **OFF** | Panel off. No suspend, no hibernate, no lock. Keeps working. |
+| **ON** | **ON** | Panel off and locked. Work continues. Opening the lid requires your password. |
+| **OFF** | Either | Stock lid policy applies. |
 
 No separate widget, no oversized icon: Sleepwalker **is** Omarchy's
 indicator strip with a 7th entry — same size, same dim-when-off, same
 hover-reveal as the other six.
 
-> **Right-click Laptop to switch Lock on close on or off.** This setting
-> takes effect while Sleepwalker is on. It does not change the global suspend,
-> hibernate, idle, or screensaver policy.
+Lock takes effect while Working is ON. It does not change the global suspend,
+hibernate, idle, or screensaver policy.
 
 ## Commands
 
