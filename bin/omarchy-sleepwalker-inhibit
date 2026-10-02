@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Own the one inhibitor that Sleepwalker starts.  A PID alone is not enough:
+# it can be reused after a crash.  The token stays in the child environment,
+# so reap verifies the PID, exact argv, and token before it sends a signal.
+set -euo pipefail
+
+TOGGLES_DIR="${SLEEPWALKER_TOGGLES_DIR:-$HOME/.local/state/omarchy/toggles}"
+PID_FILE="$TOGGLES_DIR/sleepwalker-inhibit.pid"
+PROC_ROOT="${SLEEPWALKER_PROC_ROOT:-/proc}"
+KILL_BIN="${SLEEPWALKER_KILL_BIN:-/bin/kill}"
+
+valid_token() { [[ "$1" =~ ^[A-Za-z0-9._-]{16,128}$ ]]; }
+
+owns_pid() {
+  local pid="$1" token="$2" proc="$PROC_ROOT/$pid" arg
+  [[ "$pid" =~ ^[1-9][0-9]*$ ]] && valid_token "$token" || return 1
+  [[ -r "$proc/cmdline" && -r "$proc/environ" ]] || return 1
+  mapfile -d '' -t argv < "$proc/cmdline"
+  [[ ${#argv[@]} -eq 6 ]] || return 1
+  [[ "${argv[0]}" == "systemd-inhibit" && "${argv[1]}" == "--what=handle-lid-switch" \
+     && "${argv[2]}" == "--who=Omarchy Sleepwalker" && "${argv[3]}" == "--why=Keep working lid closed" \
+     && "${argv[4]}" == "sleep" && "${argv[5]}" == "infinity" ]] || return 1
+  tr '\0' '\n' < "$proc/environ" | grep -Fxq "SLEEPWALKER_INHIBIT_TOKEN=$token"
+}
+
+reap() {
+  local pid token extra
+  [[ -r "$PID_FILE" ]] || return 0
+  IFS=$'\t' read -r pid token extra < "$PID_FILE" || { rm -f -- "$PID_FILE"; return 0; }
+  if owns_pid "$pid" "$token"; then "$KILL_BIN" "$pid" 2>/dev/null || true; fi
+  rm -f -- "$PID_FILE"
+}
+
+case "${1:-}" in
+  --reap) reap ;;
+  *)
+    token="${1:-}"
+    valid_token "$token" || { echo "sleepwalker-inhibit: invalid token" >&2; exit 2; }
+    mkdir -p -- "$TOGGLES_DIR"
+    umask 077
+    tmp=$(mktemp "$TOGGLES_DIR/.sleepwalker-inhibit.XXXXXX")
+    printf '%s\t%s\n' "$$" "$token" > "$tmp"
+    mv -f -- "$tmp" "$PID_FILE"
+    exec env "SLEEPWALKER_INHIBIT_TOKEN=$token" systemd-inhibit \
+      --what=handle-lid-switch --who="Omarchy Sleepwalker" \
+      --why="Keep working lid closed" sleep infinity
+    ;;
+esac

@@ -52,23 +52,12 @@ wait_inhibit() {
   echo "warning: toggle on but inhibitor inactive — run: $SELF doctor" >&2
 }
 
-# Crash-orphaned inhibitors (PPID 1) survive shell restarts and plain toggle
-# flips: logind ORs duplicate handles, so a stray keeps the lid inhibited
-# after `lid off`. All handles we ever spawn carry our --who string, so reap
-# by exact match. Called only when the toggle is off, when nothing should
-# be held; if the live Service still thinks otherwise it respawns its own.
+# Crash-orphaned inhibitors survive shell restarts. The wrapper records a PID
+# and a private token, then verifies both before it kills anything.
 reap_strays() {
-  local pids
-  if ! command -v pgrep >/dev/null 2>&1; then
-    echo "warning: no pgrep — cannot reap orphaned inhibitors" >&2
-    return 0
-  fi
-  # [w] trick: the pattern must not match our own command line when a
-  # caller (or test) carries the literal string.
-  pids=$(pgrep -f "systemd-inhibit.*--who=Omarchy Sleepwalke[r]" 2>/dev/null || true)
-  [[ -n $pids ]] || return 0
-  # shellcheck disable=SC2086
-  kill $pids 2>/dev/null || true
+  local reaper="$(dirname "$0")/omarchy-sleepwalker-inhibit"
+  [[ -x $reaper ]] || { echo "warning: inhibitor reaper is unavailable" >&2; return 0; }
+  "$reaper" --reap
 }
 
 set_lid() {

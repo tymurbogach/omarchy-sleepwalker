@@ -14,6 +14,7 @@ There is no build step, package manager or test suite: the plugin is QML plus
 bash scripts. After a substantial change, run this verification:
 
 ```bash
+tests/reap-tests.sh
 omarchy plugin validate .
 qmllint -I "$OMARCHY_PATH/shell" <changed .qml files>
 
@@ -60,7 +61,9 @@ Three moving parts, one shared state directory, no polling:
   fast second toggle waits in a queue instead of racing a second bash call
   over the same state files. If the shell crashes while on, its inhibitor
   child is orphaned (PPID 1): `lid off`, `doctor` and `uninstall.sh` reap it
-  by `--who` match (`reap_strays`), because a restart alone never kills it.
+  through the PID and private token written by the inhibitor wrapper, because
+  a restart alone never kills it. The reaper verifies the exact argv and token
+  before it signals a process.
 - **`Indicators.qml`** (entry point `barWidget`) is a clone of the stock
   Omarchy indicator strip (`$OMARCHY_PATH/shell/plugins/bar/widgets/Indicators.qml`).
   `install.sh --sync-stock` regenerates it with three documented patches (see

@@ -27,10 +27,12 @@ Item {
   readonly property string lidToggle: togglesDir + "/sleepwalker"
   readonly property string lidToggleLegacy: togglesDir + "/lid-ignore"
   readonly property string lockToggle: togglesDir + "/lid-lock"
+  readonly property string inhibitor: Qt.resolvedUrl("bin/omarchy-sleepwalker-inhibit").toString().replace("file://", "")
 
   property bool lidOn: false
   property bool lockOnLid: false
   property bool stateLoaded: false
+  readonly property string inhibitorToken: String(Date.now()) + "-" + String(Math.random()).replace(".", "")
 
   function shQuote(path) {
     return "'" + String(path).split("'").join("'\"'\"'") + "'"
@@ -137,11 +139,7 @@ Item {
   Process {
     id: inhibitProc
     running: root.lidOn
-    command: ["systemd-inhibit",
-      "--what=handle-lid-switch",
-      "--who=Omarchy Sleepwalker",
-      "--why=Keep working lid closed",
-      "sleep", "infinity"]
+    command: [root.inhibitor, root.inhibitorToken]
   }
 
   FileView {

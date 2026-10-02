@@ -101,14 +101,11 @@ rm -f "$HOME/.local/state/omarchy/toggles/sleepwalker" "$HOME/.local/state/omarc
 rm -f "$HOME/.local/state/omarchy/toggles/lid-lock"
 rm -rf "$HOME/.local/state/omarchy/sleepwalker" 2>/dev/null || true
 
-# Reap crash-orphaned inhibitors (PPID 1): nothing should be held now, and a
-# restart alone never kills them. Match our --who string ([r] trick so the
-# pattern never matches our own command line).
-strays=$(pgrep -f "systemd-inhibit.*--who=Omarchy Sleepwalke[r]" 2>/dev/null || true)
-if [[ -n $strays ]]; then
-  # shellcheck disable=SC2086
-  kill $strays 2>/dev/null || true
-  echo "· reaped orphaned inhibitor(s)"
+# Reap only the inhibitor whose PID and private token the plugin recorded.
+REAPER="$(dirname "$0")/bin/omarchy-sleepwalker-inhibit"
+if [[ -x $REAPER ]]; then
+  "$REAPER" --reap
+  echo "· reaped owned orphaned inhibitor, if present"
 fi
 
 # Legacy (<0.2.0) derived indicators clones: remove ours, spare others'.

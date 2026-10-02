@@ -49,8 +49,9 @@ alone is a working install.
 
 Orphans: a shell crash reparents the child to PID 1 and the handle
 survives (logind ORs duplicates). The service never reaps on load —
-reaping on load would break the persistence in §1. Reapers, all matching
-the `--who` string and only when nothing should be held:
+reaping on load would break the persistence in §1. Reapers verify the PID,
+private token, and exact arguments that the wrapper recorded. They run only
+when nothing should be held:
 `lid off`, `doctor` (stray branch), `uninstall.sh`.
 `status` reports the live child only; use `systemd-inhibit --list` to see
 orphans.
