@@ -32,10 +32,12 @@ BarIndicator {
   }
 
   function refreshRain() {
+    console.log("Sleepwalker: rain menu opened, cli:", root.rainCli)
     if (!rainProc.running) rainProc.running = true
   }
 
   function useRain(which) {
+    console.log("Sleepwalker: rain row clicked:", which)
     root.rainMenuOpen = false
     switchProc.command = [root.rainCli, which]
     switchProc.running = true
