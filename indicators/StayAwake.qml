@@ -84,33 +84,47 @@ BarIndicator {
         font.bold: true
       }
 
-      Repeater {
-        model: [
-          { "id": "ttfx", "label": "ttfx — terminal" },
-          { "id": "gpu", "label": "Enter the Matrix — GPU" }
-        ]
+      Item {
+        id: ttfxRow
+        width: parent.width
+        height: Math.max(ttfxText.implicitHeight, Style.space(24))
 
-        Item {
-          id: rowRoot
-          property var modelData
-          width: parent.width
-          height: Math.max(rowText.implicitHeight, Style.space(24))
+        Text {
+          id: ttfxText
+          anchors.verticalCenter: parent.verticalCenter
+          text: (root.rainMode === "ttfx" ? "● " : "○ ") + "ttfx — terminal"
+          color: root.foreground
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.body
+        }
 
-          Text {
-            id: rowText
-            anchors.verticalCenter: parent.verticalCenter
-            text: (root.rainMode === rowRoot.modelData.id ? "● " : "○ ") + rowRoot.modelData.label
-            color: root.foreground
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.body
-          }
+        MouseArea {
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onClicked: root.useRain("ttfx")
+        }
+      }
 
-          MouseArea {
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: root.useRain(rowRoot.modelData.id)
-          }
+      Item {
+        id: gpuRow
+        width: parent.width
+        height: Math.max(gpuText.implicitHeight, Style.space(24))
+
+        Text {
+          id: gpuText
+          anchors.verticalCenter: parent.verticalCenter
+          text: (root.rainMode === "gpu" ? "● " : "○ ") + "Enter the Matrix — GPU"
+          color: root.foreground
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.body
+        }
+
+        MouseArea {
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onClicked: root.useRain("gpu")
         }
       }
 
