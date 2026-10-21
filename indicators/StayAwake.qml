@@ -39,8 +39,11 @@ BarIndicator {
   function useRain(which) {
     console.log("Sleepwalker: rain row clicked:", which)
     root.rainMenuOpen = false
-    switchProc.command = [root.rainCli, which]
-    switchProc.running = true
+    if (which === "gpu") {
+      if (!useGpuProc.running) useGpuProc.running = true
+    } else {
+      if (!useTtfxProc.running) useTtfxProc.running = true
+    }
   }
 
   Process {
@@ -59,7 +62,25 @@ BarIndicator {
   }
 
   Process {
-    id: switchProc
+    id: useGpuProc
+    command: [root.rainCli, "use-gpu"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: console.log("Sleepwalker: rain switch out:", String(text || "").trim().slice(-200))
+    }
+    stderr: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: console.warn("Sleepwalker: rain switch err:", String(text || "").trim().slice(-200))
+    }
+    onExited: function(code) {
+      console.log("Sleepwalker: rain switch exited:", code)
+      root.refreshRain()
+    }
+  }
+
+  Process {
+    id: useTtfxProc
+    command: [root.rainCli, "use-ttfx"]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: console.log("Sleepwalker: rain switch out:", String(text || "").trim().slice(-200))
