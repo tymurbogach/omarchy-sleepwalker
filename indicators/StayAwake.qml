@@ -24,6 +24,13 @@ BarIndicator {
     if (root.idleService) root.idleService.setIdleEnabled(root.active)
   }
 
+  // Called by PopupCard on outside-click dismissal. Flipping the source
+  // property keeps the open binding intact (assigning popup.open directly
+  // would break it and the menu would never reopen).
+  function close() {
+    root.rainMenuOpen = false
+  }
+
   function refreshRain() {
     if (!rainProc.running) rainProc.running = true
   }
@@ -51,6 +58,18 @@ BarIndicator {
 
   Process {
     id: switchProc
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: console.log("Sleepwalker: rain switch out:", String(text || "").trim().slice(-200))
+    }
+    stderr: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: console.warn("Sleepwalker: rain switch err:", String(text || "").trim().slice(-200))
+    }
+    onExited: function(code) {
+      console.log("Sleepwalker: rain switch exited:", code)
+      root.refreshRain()
+    }
   }
 
   onPressed: function(button) {

@@ -13,10 +13,12 @@
 set -euo pipefail
 
 GPU_ID="io.github.tymurbogach.enter-the-matrix"
+OMARCHY_BIN="${OMARCHY_BIN:-/usr/share/omarchy/bin/omarchy}"
+[[ -x $OMARCHY_BIN ]] || OMARCHY_BIN="omarchy"
 
 mode() {
   local enabled
-  enabled=$(omarchy plugin list --json 2>/dev/null | jq -r --arg id "$GPU_ID" '.[] | select(.id == $id) | .enabled' | head -1)
+  enabled=$("$OMARCHY_BIN" plugin list --json 2>/dev/null | jq -r --arg id "$GPU_ID" '.[] | select(.id == $id) | .enabled' | head -1)
   if [[ $enabled == "true" ]]; then
     echo "gpu"
   else
@@ -30,15 +32,15 @@ case "${1:-}" in
     ;;
   use-ttfx)
     if [[ $(mode) != "ttfx" ]]; then
-      omarchy plugin disable "$GPU_ID"
+      "$OMARCHY_BIN" plugin disable "$GPU_ID"
     fi
-    omarchy restart shell
+    "$OMARCHY_BIN" restart shell
     ;;
   use-gpu)
     if [[ $(mode) != "gpu" ]]; then
-      omarchy plugin enable "$GPU_ID"
+      "$OMARCHY_BIN" plugin enable "$GPU_ID"
     fi
-    omarchy restart shell
+    "$OMARCHY_BIN" restart shell
     ;;
   *)
     echo "Usage: omarchy-rain-mode status | use-ttfx | use-gpu" >&2
