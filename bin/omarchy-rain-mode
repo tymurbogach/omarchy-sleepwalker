@@ -5,14 +5,19 @@
 # terminal, so each switch disables the other side and restarts the shell,
 # which is the only reliable QML reload.
 #
+# The GPU mode also owns the lock rain: use-gpu (re)derives the GPU lock
+# clone (the pack's own hooks tear it down under other themes), use-ttfx
+# removes any lock clone so the stock lock returns.
+#
 # Usage: omarchy-rain-mode status | use-ttfx | use-gpu
 #   status   prints "ttfx" or "gpu" on stdout, exit 0
-#   use-ttfx disables the GPU plugin, keeps ttfx, restarts the shell
-#   use-gpu  enables the GPU plugin (ttfx stays installed but covered), restarts
+#   use-ttfx removes GPU lock clone, disables GPU plugin, restarts the shell
+#   use-gpu  enables GPU plugin, derives GPU lock clone, restarts the shell
 
 set -euo pipefail
 
 GPU_ID="io.github.tymurbogach.enter-the-matrix"
+DERIVE_LOCK="/home/cyberdyne/Projects/omarchy-enter-the-matrix-theme/lib/derive-lock.py"
 OMARCHY_BIN="${OMARCHY_BIN:-/usr/share/omarchy/bin/omarchy}"
 [[ -x $OMARCHY_BIN ]] || OMARCHY_BIN="omarchy"
 
@@ -26,12 +31,33 @@ mode() {
   fi
 }
 
+# Any enabled lock clone (never the stock lock itself): the GPU one to
+# remove when leaving GPU mode, so no two clones fight over the lock IPC.
+lock_clones() {
+  "$OMARCHY_BIN" plugin list --json 2>/dev/null | jq -r '.[] | select(.enabled and (.clonedFrom // "") == "omarchy.lock" and .id != "omarchy.lock") | .id'
+}
+
+remove_lock_clones() {
+  local id
+  while IFS= read -r id; do
+    [[ -n $id ]] || continue
+    "$OMARCHY_BIN" plugin remove "$id" --yes >/dev/null 2>&1 || true
+  done < <(lock_clones)
+}
+
+apply_gpu_lock() {
+  if [[ -x $DERIVE_LOCK ]]; then
+    python3 "$DERIVE_LOCK" >/dev/null 2>&1 || true
+  fi
+}
+
 case "${1:-}" in
   status)
     mode
     ;;
   use-ttfx)
     if [[ $(mode) != "ttfx" ]]; then
+      remove_lock_clones
       "$OMARCHY_BIN" plugin disable "$GPU_ID"
     fi
     "$OMARCHY_BIN" restart shell
@@ -40,6 +66,7 @@ case "${1:-}" in
     if [[ $(mode) != "gpu" ]]; then
       "$OMARCHY_BIN" plugin enable "$GPU_ID"
     fi
+    apply_gpu_lock
     "$OMARCHY_BIN" restart shell
     ;;
   *)
