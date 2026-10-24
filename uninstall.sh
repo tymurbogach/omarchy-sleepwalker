@@ -101,6 +101,9 @@ rm -f "$HOME/.local/state/omarchy/toggles/sleepwalker" "$HOME/.local/state/omarc
 rm -f "$HOME/.local/state/omarchy/toggles/lid-lock"
 rm -rf "$HOME/.local/state/omarchy/sleepwalker" 2>/dev/null || true
 
+echo "· restoring stock suspend lock (safe default)"
+systemctl --user start omarchy-sleep-lock.service >/dev/null 2>&1 || true
+
 # Reap only the inhibitor whose PID and private token the plugin recorded.
 REAPER="$(dirname "$0")/bin/omarchy-sleepwalker-inhibit"
 if [[ -x $REAPER ]]; then

@@ -4,8 +4,13 @@
 # Hyprland calls `omarchy-system-lid-close` on `switch:on:Lid Switch`
 # (default/hypr/bindings/utilities.lua:34). Stock locks (unless docked) and
 # reconciles displays via omarchy-hyprland-monitor-clamshell.
-# When Sleepwalker is on and lock-on-lid is off, we skip the lock but still
-# reconcile displays, so closing the lid only powers off the panel.
+# Lock ON (lid-lock present) always means stock: lock + clamshell, whether
+# Working is ON (inhibited, no suspend) or OFF (suspends via logind).
+# Lock OFF means never lock on lid: only reconcile displays, so opening the
+# lid never asks for a password. When Working is OFF the lid still suspends
+# via logind (no inhibitor held); when ON the inhibitor holds suspend.
+# The suspend-time lock (omarchy-sleep-lock.service) is suppressed separately
+# by `omarchy-sleepwalker lock off` stopping that user service.
 #
 # Installed to ~/.local/bin which sorts before /usr/share/omarchy/bin on
 # Omarchy's PATH, so this shadows the stock script without touching /usr.
@@ -19,11 +24,7 @@ set -euo pipefail
 REAL="/usr/share/omarchy/bin/omarchy-system-lid-close"
 CLAMSHELL="/usr/share/omarchy/bin/omarchy-hyprland-monitor-clamshell"
 TOGGLES_DIR="$HOME/.local/state/omarchy/toggles"
-IGNORE_FLAG="$TOGGLES_DIR/sleepwalker"
-IGNORE_FLAG_LEGACY="$TOGGLES_DIR/lid-ignore"
 LOCK_FLAG="$TOGGLES_DIR/lid-lock"
-
-ignoring() { [[ -f $IGNORE_FLAG || -f $IGNORE_FLAG_LEGACY ]]; }
 
 # Stock gone (broken system package): reconcile displays if possible, warn,
 # and report failure instead of silently succeeding.
@@ -36,17 +37,13 @@ if [[ ! -x $REAL ]]; then
   exit 127
 fi
 
-# If not ignoring, delegate 1:1 to stock (lock + clamshell).
-if ! ignoring; then
-  exec "$REAL"
-fi
-
-# Ignoring: honour optional lock-on-lid toggle.
+# Lock ON (flag present) always means stock: lock + clamshell, whether
+# Working is ON or OFF.
 if [[ -f $LOCK_FLAG ]]; then
   exec "$REAL"
 fi
 
-# Ignore + no lock → only reconcile displays, no lock. The exit code is the
+# Lock OFF → only reconcile displays, no lock. The exit code is the
 # clamshell's (like stock), never masked.
 if [[ -x $CLAMSHELL ]]; then
   "$CLAMSHELL" >/dev/null 2>&1

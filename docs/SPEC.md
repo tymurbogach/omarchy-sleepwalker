@@ -12,7 +12,7 @@ All state is file presence under `~/.local/state/omarchy/toggles/`:
 |---|---|
 | `sleepwalker` | Lid-ignore on (preferred name) |
 | `lid-ignore` | Same, legacy name. Read everywhere, written nowhere. Migrated to `sleepwalker` on write. |
-| `lid-lock` | Lock on lid close, opt-in, default absent |
+| `lid-lock` | Lock on lid close and suspend, opt-in, default absent, effective in both modes |
 
 Readers check existence only, never content: `touch` and `rm -f`.
 Readers: `Service.qml` (probe + `FileView` watcher), `Laptop.qml` fallback
@@ -60,9 +60,15 @@ orphans.
 
 Stock semantics preserved on every path:
 
-- Toggle off, or toggle on with `lid-lock` present: `exec` stock 1:1.
-- Toggle on without lock: run stock clamshell only (panel off, displays
-  reconciled), exit its code, no lock.
+- `lid-lock` present: `exec` stock 1:1 (lock + clamshell), whether Working
+  is ON or OFF.
+- `lid-lock` absent: run stock clamshell only (panel off, displays
+  reconciled), exit its code, no lock. When Working is OFF logind still
+  suspends (no inhibitor held); when ON the inhibitor holds suspend.
+- The suspend-time lock (`omarchy-sleep-lock.service`, PrepareForSleep) is
+  suppressed separately: `lock off` stops that user service, `lock on`
+  starts it. The monitor calls the absolute stock path, so no PATH shim
+  can intercept it.
 - The lid binding is pinned to the shim by absolute path
   (`install.sh:pin_lid_binding`, marked block in `bindings.lua`) because
   systemd-unit exec contexts resolve `/usr/share/omarchy/bin` before

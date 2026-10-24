@@ -7,7 +7,13 @@ import Quickshell.Io
 // Single source of truth is two files under ~/.local/state/omarchy/toggles/:
 //   sleepwalker  presence = keep working with the lid closed (preferred)
 //   lid-ignore   presence = same, legacy name (read, never written)
-//   lid-lock     presence = additionally lock on lid close (opt-in)
+//   lid-lock     presence = lock on lid close and suspend (opt-in, both modes)
+//
+// Lock OFF additionally stops omarchy-sleep-lock.service (user unit) so a
+// suspend wakes unlocked; lock ON starts it again. The shim
+// (bin/omarchy-system-lid-close) already skips the immediate lid-close lock
+// when the flag is absent; the service sync covers the PrepareForSleep path,
+// which calls the absolute stock path and cannot be shadowed.
 //
 // The inhibitor is a child `systemd-inhibit … sleep infinity` held while the
 // toggle is on — no systemd unit, no install step. `omarchy plugin add` alone
@@ -83,6 +89,10 @@ Item {
     lockOnLid = on
     var cmd = "mkdir -p " + shQuote(root.togglesDir) + "; "
     cmd += on ? "touch " + shQuote(root.lockToggle) : "rm -f " + shQuote(root.lockToggle)
+    // Keep the suspend-time lock in step: stopped = wake unlocked.
+    // Best-effort; a missing systemctl or service never fails the toggle.
+    cmd += on ? "; systemctl --user start omarchy-sleep-lock.service >/dev/null 2>&1 || true"
+               : "; systemctl --user stop omarchy-sleep-lock.service >/dev/null 2>&1 || true"
     runWrite(cmd)
   }
 
@@ -94,7 +104,20 @@ Item {
     })
   }
 
-  Component.onCompleted: refresh()
+  Component.onCompleted: {
+    refresh()
+    // Reboot restores omarchy-sleep-lock.service (enabled) even when lock is
+    // OFF. Re-apply the flag once at load so suspend wakes unlocked.
+    sleepLockBootSync.running = true
+  }
+
+  // One-shot, boot only: no polling. Toggle-time sync lives in setLock().
+  Process {
+    id: sleepLockBootSync
+    command: ["bash", "-c",
+      "if [[ -f " + root.shQuote(root.lockToggle) + " ]]; then systemctl --user start omarchy-sleep-lock.service >/dev/null 2>&1 || true; "
+      + "else systemctl --user stop omarchy-sleep-lock.service >/dev/null 2>&1 || true; fi"]
+  }
 
   Process {
     id: probe

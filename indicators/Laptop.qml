@@ -40,8 +40,8 @@ BarIndicator {
     ? "Working ON. Lock  ON. Right-click: switch lock off."
     : "Working ON. Lock  OFF. Right-click: switch lock on."
   inactiveTooltipText: lockOnLid
-    ? "Working OFF. Lock  ON. Right-click: switch lock off."
-    : "Working OFF. Lock  OFF. Right-click: switch lock on."
+    ? "Working OFF (suspend). Lock  ON. Right-click: switch lock off."
+    : "Working OFF (suspend). Lock  OFF (wake unlocked). Right-click: switch lock on."
   // Keep the inactive slot interactive while the pointer remains over it.
   // A left-click can turn the indicator off under that same pointer.
   maintainIndicatorReveal: true

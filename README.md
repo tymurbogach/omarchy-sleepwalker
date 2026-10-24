@@ -42,14 +42,17 @@ downloads, builds, servers, and SSH sessions continue with the lid closed.
 |---|---|---|
 | **ON** | **OFF** | Panel off. No suspend, no hibernate, no lock. Keeps working. |
 | **ON** | **ON** | Panel off and locked. Work continues. Opening the lid requires your password. |
-| **OFF** | Either | Stock lid policy applies. |
+| **OFF** | **OFF** | Suspends, wakes unlocked. No password on open. |
+| **OFF** | **ON** | Suspends locked (stock). Opening the lid requires your password. |
 
 No separate widget, no oversized icon: Sleepwalker **is** Omarchy's
 indicator strip with a 7th entry — same size, same dim-when-off, same
 hover-reveal as the other six.
 
-Lock takes effect while Working is ON. It does not change the global suspend,
-hibernate, idle, or screensaver policy.
+Lock applies in both modes. `lock off` stops `omarchy-sleep-lock.service`
+(user unit) so a suspend wakes unlocked; `lock on` starts it again. It does
+not change hibernate, idle, or screensaver policy: after a long sleep the
+stock `idle.lock` timeout can still lock the session.
 
 ## Commands
 
@@ -58,8 +61,8 @@ hibernate, idle, or screensaver policy.
 | `omarchy-sleepwalker lid on` | Keep working with the lid closed. |
 | `omarchy-sleepwalker lid off` | Return to stock suspend. |
 | `omarchy-sleepwalker lid toggle` | Flip the lid setting. |
-| `omarchy-sleepwalker lock on` | Lock on close, with no suspend. |
-| `omarchy-sleepwalker lock off` | Close without locking. |
+| `omarchy-sleepwalker lock on` | Lock on close and suspend, in both modes. |
+| `omarchy-sleepwalker lock off` | Close and suspend without locking. |
 | `omarchy-sleepwalker status` | Show lid, inhibitor, and lock state. |
 | `omarchy-sleepwalker doctor` | Reconcile the toggle and inhibitor. |
 

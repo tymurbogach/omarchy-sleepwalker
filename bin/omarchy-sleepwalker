@@ -9,7 +9,10 @@
 # State (single source of truth, shared with Service.qml + Laptop indicator):
 #   ~/.local/state/omarchy/toggles/sleepwalker — presence = lid-ignore on (preferred)
 #   ~/.local/state/omarchy/toggles/lid-ignore  — presence = same, legacy (read, migrated away on write)
-#   ~/.local/state/omarchy/toggles/lid-lock    — presence = also lock on lid close (opt-in)
+#   ~/.local/state/omarchy/toggles/lid-lock    — presence = lock on lid close and suspend (opt-in, both modes)
+#
+# Lock OFF additionally stops omarchy-sleep-lock.service (user unit) so a
+# suspend wakes unlocked; lock ON starts it again. See sync_sleep_lock().
 #
 # The inhibitor itself is held by the plugin's Service.qml as a child
 # `systemd-inhibit … sleep infinity` while the toggle is on — no systemd unit,
@@ -30,6 +33,22 @@ fail() { echo "$SELF: $*" >&2; exit 1; }
 
 is_ignore_on() { [[ -f $TOGGLE_IGNORE || -f $TOGGLE_IGNORE_LEGACY ]]; }
 is_lock_on()   { [[ -f $TOGGLE_LOCK ]]; }
+
+# Lock OFF must also suppress the suspend-time lock, not just the lid-close
+# immediate lock. Stock holds PrepareForSleep via omarchy-sleep-lock.service,
+# which calls the absolute stock path (no PATH shadow possible). The only
+# user-owned lever is the service itself: stopped = suspend without lock,
+# started = stock lock. Best-effort: never fail a toggle on systemctl.
+sync_sleep_lock() {
+  command -v systemctl >/dev/null 2>&1 || return 0
+  if is_lock_on; then
+    systemctl --user start omarchy-sleep-lock.service >/dev/null 2>&1 || \
+      echo "warning: could not start omarchy-sleep-lock.service" >&2
+  else
+    systemctl --user stop omarchy-sleep-lock.service >/dev/null 2>&1 || \
+      echo "warning: could not stop omarchy-sleep-lock.service" >&2
+  fi
+}
 
 # The Service-held inhibitor shows in logind with our --who string.
 is_inhibit_active() {
@@ -90,10 +109,11 @@ set_lock() {
       rm -f "$TOGGLE_LOCK"
       ;;
     toggle|"")
-      if is_lock_on; then set_lock off; else set_lock on; fi
+      if is_lock_on; then set_lock off; return; else set_lock on; return; fi
       ;;
     *) fail "lock: expected on|off|toggle, got '$action'" ;;
   esac
+  sync_sleep_lock
 }
 
 service_loaded() {
@@ -118,6 +138,9 @@ cmd_status() {
     printf 'lid-ignore: %s\n' "$([ "$active" = true ] && echo on || echo off)"
     printf 'inhibit:    %s\n' "$([ "$inhibit" = true ] && echo active || echo inactive)"
     printf 'lock-on-lid:%s\n' "$([ "$lock" = true ] && echo on || echo off)"
+    if command -v systemctl >/dev/null 2>&1; then
+      printf 'sleep-lock: %s\n' "$(systemctl --user is-active omarchy-sleep-lock.service 2>/dev/null || true)"
+    fi
     if [[ $active == true && $inhibit == false ]]; then
       echo "warning: toggle on but inhibitor inactive — run: $SELF doctor" >&2
     fi
@@ -160,6 +183,25 @@ cmd_doctor() {
   else
     echo "· in sync"
   fi
+  # Suspend-time lock must follow the same flag: lock ON = service running
+  # (stock PrepareForSleep lock), lock OFF = service stopped (wake unlocked).
+  if command -v systemctl >/dev/null 2>&1; then
+    local want have
+    is_lock_on && want=active || want=inactive
+    # NOTE: is-active prints the state but exits non-zero when not active,
+    # so `|| true` preserves its output instead of replacing it.
+    have=$(systemctl --user is-active omarchy-sleep-lock.service 2>/dev/null || true)
+    [[ -n $have ]] || have=unknown
+    if [[ $want == active && $have != active ]]; then
+      echo "· sleep-lock $have but lock is on — starting it"
+      systemctl --user start omarchy-sleep-lock.service >/dev/null 2>&1 || echo "· start it with: systemctl --user start omarchy-sleep-lock.service" >&2
+    elif [[ $want == inactive && $have == active ]]; then
+      echo "· sleep-lock active but lock is off — stopping it so suspend wakes unlocked"
+      systemctl --user stop omarchy-sleep-lock.service >/dev/null 2>&1 || echo "· stop it with: systemctl --user stop omarchy-sleep-lock.service" >&2
+    else
+      echo "· sleep-lock $have matches lock $(is_lock_on && echo on || echo off)"
+    fi
+  fi
   echo "· ok"
 }
 
@@ -175,7 +217,7 @@ Usage: $SELF <command> [args]
 
   status [--json]          show lid state
   lid on|off|toggle        inhibit lid suspend (keep working closed)
-  lock on|off|toggle       lock on lid close when lid-ignore is on (default off)
+  lock on|off|toggle       lock on lid close and suspend (default off)
   doctor                   reconcile toggle vs inhibitor, drop legacy units
   remove                   remove plugin-owned files, then remove the plugin
 USAGE
