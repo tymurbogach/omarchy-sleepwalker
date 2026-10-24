@@ -253,7 +253,9 @@ pin_lid_binding
 # stay skipped (jq-only) and say so.
 plugin_added() {
   local list
-  list=$(omarchy plugin list --json 2>/dev/null) || return 1
+  # Force UTF-8 for this call only: under the script's LC_ALL=C, the Qt-based
+  # CLI warns about the non-UTF-8 locale on stdout, which poisons the JSON.
+  list=$(LC_ALL=C.UTF-8 omarchy plugin list --json 2>/dev/null) || return 1
   if command -v jq >/dev/null 2>&1; then
     printf '%s' "$list" | jq -e --arg id "$ID" 'any(.[]; .id == $id)' >/dev/null
   else
@@ -267,7 +269,7 @@ if plugin_added; then
   # Enable is idempotent registry-side, but it still costs a replace+rescan
   # storm — skip it when already enabled. (Without jq we cannot see the
   # flag, so run it unconditionally there.)
-  if omarchy plugin list --json 2>/dev/null | jq -e --arg id "$ID" 'any(.[]; .id == $id and .enabled == true)' >/dev/null 2>&1; then
+  if LC_ALL=C.UTF-8 omarchy plugin list --json 2>/dev/null | jq -e --arg id "$ID" 'any(.[]; .id == $id and .enabled == true)' >/dev/null 2>&1; then
     echo "· plugin already enabled"
   else
     omarchy plugin enable "$ID" >/dev/null 2>&1 || true
