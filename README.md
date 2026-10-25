@@ -50,9 +50,11 @@ indicator strip with a 7th entry — same size, same dim-when-off, same
 hover-reveal as the other six.
 
 Lock applies in both modes. `lock off` stops `omarchy-sleep-lock.service`
-(user unit) so a suspend wakes unlocked; `lock on` starts it again. It does
-not change hibernate, idle, or screensaver policy: after a long sleep the
-stock `idle.lock` timeout can still lock the session.
+(user unit) so any suspend — lid, menu, or power button — wakes unlocked;
+`lock on` starts it again. Note: lock defaults to OFF, so a fresh install
+wakes unlocked from suspend until you run `lock on` (stock always locked).
+It does not change hibernate, idle, or screensaver policy: after a long
+sleep the stock `idle.lock` timeout can still lock the session.
 
 ## Commands
 

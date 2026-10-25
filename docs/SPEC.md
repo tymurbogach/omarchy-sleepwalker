@@ -67,8 +67,10 @@ Stock semantics preserved on every path:
   suspends (no inhibitor held); when ON the inhibitor holds suspend.
 - The suspend-time lock (`omarchy-sleep-lock.service`, PrepareForSleep) is
   suppressed separately: `lock off` stops that user service, `lock on`
-  starts it. The monitor calls the absolute stock path, so no PATH shim
-  can intercept it.
+  starts it. This covers any suspend (lid, menu, power button), not just
+  lid-close. Since the flag defaults to absent, a fresh install leaves
+  suspend unlocked until `lock on` runs. The monitor calls the absolute
+  stock path, so no PATH shim can intercept it.
 - The lid binding is pinned to the shim by absolute path
   (`install.sh:pin_lid_binding`, marked block in `bindings.lua`) because
   systemd-unit exec contexts resolve `/usr/share/omarchy/bin` before
