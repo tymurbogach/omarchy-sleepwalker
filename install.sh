@@ -377,7 +377,7 @@ cat <<EOF
 
   Verify:
     $CLI lid on && systemd-inhibit --list | grep -i sleepwalker
-    # close lid 10s → panel off, no suspend, no lock (lock opt-in: $CLI lock on)
+    # close lid 10s → panel off, locked by default ($CLI lock off wakes unlocked)
 
   Note: if the shell crashes mid-install (known stock Quickshell
   instability on reload storms), wait for its auto-restart and run

@@ -85,16 +85,18 @@ Three moving parts, one shared state directory, no polling:
   the same state files as `Service.qml` and `Laptop.qml`, so all three views
   of the toggle always agree.
 - **`bin/omarchy-system-lid-close`** is a shim installed to `~/.local/bin`,
-  which comes before `/usr/share/omarchy/bin` on `PATH`. When `lid-lock` is
-  present it delegates 1:1 to the stock script (lock + clamshell), whether
-  Working is on or off. When absent it skips the lock but still reconciles
-  the displays through the stock clamshell script. The suspend-time lock is
-  covered separately: `lock off` stops `omarchy-sleep-lock.service` (user
-  unit) so suspend wakes unlocked, `lock on` starts it again.
+  which comes before `/usr/share/omarchy/bin` on `PATH`. By default and on
+  explicit lock ON it delegates 1:1 to the stock script (lock + clamshell),
+  whether Working is on or off. Only an explicit opt-out (`lock-off`
+  without `lid-lock`) skips the lock but still reconciles the displays
+  through the stock clamshell script. The suspend-time lock is covered
+  separately: `lock off` stops `omarchy-sleep-lock.service` (user unit) so
+  suspend wakes unlocked, `lock on` starts it again.
 
 State lives only under `~/.local/state/omarchy/toggles/`. The file
 `sleepwalker` (preferred) or `lid-ignore` (legacy, read-only) means that the
-toggle is on. The file `lid-lock` means that lock-on-lid is on (opt-in). The
+toggle is on. The file `lid-lock` means explicit lock ON, `lock-off` means
+explicit lock OFF; neither means default ON (stock, fail closed). The
 plugin reads only whether a file exists, never its content: `touch` and
 `rm -f`.
 

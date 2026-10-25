@@ -45,16 +45,24 @@ downloads, builds, servers, and SSH sessions continue with the lid closed.
 | **OFF** | **OFF** | Suspends, wakes unlocked. No password on open. |
 | **OFF** | **ON** | Suspends locked (stock). Opening the lid requires your password. |
 
+Lock defaults to **ON** (stock behavior). Right-click the Laptop indicator
+(or `omarchy-sleepwalker lock off`) for an explicit opt-out; right-click
+again (or `lock on`) to return to stock.
+
 No separate widget, no oversized icon: Sleepwalker **is** Omarchy's
 indicator strip with a 7th entry — same size, same dim-when-off, same
 hover-reveal as the other six.
 
-Lock applies in both modes. `lock off` stops `omarchy-sleep-lock.service`
-(user unit) so any suspend — lid, menu, or power button — wakes unlocked;
-`lock on` starts it again. Note: lock defaults to OFF, so a fresh install
-wakes unlocked from suspend until you run `lock on` (stock always locked).
+Lock applies in both modes and defaults to **ON** (stock behavior). `lock off`
+records an explicit opt-out: it stops `omarchy-sleep-lock.service` (user
+unit) so any suspend — lid, menu, or power button — wakes unlocked;
+`lock on` returns to stock and starts it again.
 It does not change hibernate, idle, or screensaver policy: after a long
 sleep the stock `idle.lock` timeout can still lock the session.
+
+Upgrading from 0.4.x: that version treated a missing flag as OFF, so an
+explicit 0.4.x opt-out becomes default ON after this update (fail closed).
+Right-click once (or `lock off`) to opt out again.
 
 ## Commands
 

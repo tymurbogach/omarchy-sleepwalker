@@ -4,15 +4,18 @@ import Quickshell.Io
 
 // Sleepwalker service — owns the lid-close inhibitor and the toggle state.
 //
-// Single source of truth is two files under ~/.local/state/omarchy/toggles/:
+// Single source of truth is files under ~/.local/state/omarchy/toggles/:
 //   sleepwalker  presence = keep working with the lid closed (preferred)
 //   lid-ignore   presence = same, legacy name (read, never written)
-//   lid-lock     presence = lock on lid close and suspend (opt-in, both modes)
+//   lid-lock     presence = explicit lock ON
+//   lock-off     presence = explicit lock OFF
 //
-// Lock OFF additionally stops omarchy-sleep-lock.service (user unit) so a
+// Effective lock defaults to ON (stock): only lock-off without lid-lock
+// means OFF. Neither file (fresh install) is default ON — fail closed.
+// Lock OFF additionally stops omarchy-sleep-lock.service (user unit) so any
 // suspend wakes unlocked; lock ON starts it again. The shim
 // (bin/omarchy-system-lid-close) already skips the immediate lid-close lock
-// when the flag is absent; the service sync covers the PrepareForSleep path,
+// on explicit opt-out; the service sync covers the PrepareForSleep path,
 // which calls the absolute stock path and cannot be shadowed.
 //
 // The inhibitor is a child `systemd-inhibit … sleep infinity` held while the
@@ -33,6 +36,7 @@ Item {
   readonly property string lidToggle: togglesDir + "/sleepwalker"
   readonly property string lidToggleLegacy: togglesDir + "/lid-ignore"
   readonly property string lockToggle: togglesDir + "/lid-lock"
+  readonly property string lockOffToggle: togglesDir + "/lock-off"
   readonly property string inhibitor: Qt.resolvedUrl("bin/omarchy-sleepwalker-inhibit").toString().replace("file://", "")
 
   property bool lidOn: false
@@ -88,7 +92,11 @@ Item {
     var on = desired === true
     lockOnLid = on
     var cmd = "mkdir -p " + shQuote(root.togglesDir) + "; "
-    cmd += on ? "touch " + shQuote(root.lockToggle) : "rm -f " + shQuote(root.lockToggle)
+    // Pair write: exactly one of the two files exists afterwards, so a
+    // crash between the two commands still resolves fail-closed or to the
+    // previous explicit state, never to an ambiguous one.
+    cmd += on ? "touch " + shQuote(root.lockToggle) + "; rm -f " + shQuote(root.lockOffToggle)
+               : "touch " + shQuote(root.lockOffToggle) + "; rm -f " + shQuote(root.lockToggle)
     // Keep the suspend-time lock in step: stopped = wake unlocked.
     // Best-effort; a missing systemctl or service never fails the toggle.
     cmd += on ? "; systemctl --user start omarchy-sleep-lock.service >/dev/null 2>&1 || true"
@@ -106,24 +114,18 @@ Item {
 
   Component.onCompleted: {
     refresh()
-    // Reboot restores omarchy-sleep-lock.service (enabled) even when lock is
-    // OFF. Re-apply the flag once at load so suspend wakes unlocked.
-    sleepLockBootSync.running = true
-  }
-
-  // One-shot, boot only: no polling. Toggle-time sync lives in setLock().
-  Process {
-    id: sleepLockBootSync
-    command: ["bash", "-c",
-      "if [[ -f " + root.shQuote(root.lockToggle) + " ]]; then systemctl --user start omarchy-sleep-lock.service >/dev/null 2>&1 || true; "
-      + "else systemctl --user stop omarchy-sleep-lock.service >/dev/null 2>&1 || true; fi"]
+    // Reboot restores omarchy-sleep-lock.service (enabled) even on explicit
+    // OFF. Re-apply the flag once at load through the writer queue, so a
+    // toggle racing startup lands after this one-shot instead of before it.
+    runWrite("if [[ -f " + root.shQuote(root.lockOffToggle) + " && ! -f " + root.shQuote(root.lockToggle) + " ]]; then systemctl --user stop omarchy-sleep-lock.service >/dev/null 2>&1 || true; "
+      + "else systemctl --user start omarchy-sleep-lock.service >/dev/null 2>&1 || true; fi")
   }
 
   Process {
     id: probe
     command: ["bash", "-c",
       "if [[ -f " + root.shQuote(root.lidToggle) + " || -f " + root.shQuote(root.lidToggleLegacy) + " ]]; then echo lid=on; else echo lid=off; fi; "
-      + "if [[ -f " + root.shQuote(root.lockToggle) + " ]]; then echo lock=on; else echo lock=off; fi"]
+      + "if [[ -f " + root.shQuote(root.lockOffToggle) + " && ! -f " + root.shQuote(root.lockToggle) + " ]]; then echo lock=off; else echo lock=on; fi"]
     stdout: SplitParser {
       onRead: function(line) {
         var text = String(line).trim()

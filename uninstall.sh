@@ -98,7 +98,7 @@ rm -f "$HOME/.config/omarchy/hooks/post-update.d/sleepwalker"
 
 echo "· clearing toggles (off = gone)"
 rm -f "$HOME/.local/state/omarchy/toggles/sleepwalker" "$HOME/.local/state/omarchy/toggles/lid-ignore"
-rm -f "$HOME/.local/state/omarchy/toggles/lid-lock"
+rm -f "$HOME/.local/state/omarchy/toggles/lid-lock" "$HOME/.local/state/omarchy/toggles/lock-off"
 rm -rf "$HOME/.local/state/omarchy/sleepwalker" 2>/dev/null || true
 
 echo "· restoring stock suspend lock (safe default)"

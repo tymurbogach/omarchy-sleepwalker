@@ -9,9 +9,14 @@
 # State (single source of truth, shared with Service.qml + Laptop indicator):
 #   ~/.local/state/omarchy/toggles/sleepwalker — presence = lid-ignore on (preferred)
 #   ~/.local/state/omarchy/toggles/lid-ignore  — presence = same, legacy (read, migrated away on write)
-#   ~/.local/state/omarchy/toggles/lid-lock    — presence = lock on lid close and suspend (opt-in, both modes)
+#   ~/.local/state/omarchy/toggles/lid-lock    — presence = explicit lock ON
+#   ~/.local/state/omarchy/toggles/lock-off    — presence = explicit lock OFF
 #
-# Lock OFF additionally stops omarchy-sleep-lock.service (user unit) so a
+# Effective lock is ON unless an explicit opt-out exists: lock-off present
+# and lid-lock absent. Neither file (fresh install) means default ON, i.e.
+# stock behavior — fail closed. Both present (hand edit only) also means ON.
+#
+# Lock OFF additionally stops omarchy-sleep-lock.service (user unit) so any
 # suspend wakes unlocked; lock ON starts it again. See sync_sleep_lock().
 #
 # The inhibitor itself is held by the plugin's Service.qml as a child
@@ -26,13 +31,23 @@ TOGGLES_DIR="$HOME/.local/state/omarchy/toggles"
 TOGGLE_IGNORE="$TOGGLES_DIR/sleepwalker"
 TOGGLE_IGNORE_LEGACY="$TOGGLES_DIR/lid-ignore"
 TOGGLE_LOCK="$TOGGLES_DIR/lid-lock"
+TOGGLE_NOLOCK="$TOGGLES_DIR/lock-off"
 INHIBIT_WHO="Omarchy Sleepwalker"
 LEGACY_UNITS=("omarchy-sleepwalker-inhibit.service" "omarchy-lid-inhibit.service")
 
 fail() { echo "$SELF: $*" >&2; exit 1; }
 
 is_ignore_on() { [[ -f $TOGGLE_IGNORE || -f $TOGGLE_IGNORE_LEGACY ]]; }
-is_lock_on()   { [[ -f $TOGGLE_LOCK ]]; }
+# Effective lock: ON unless explicitly opted out (lock-off present without
+# an overriding lid-lock). Neither file means default ON — stock behavior.
+is_lock_on()   { [[ -f $TOGGLE_LOCK || ! -f $TOGGLE_NOLOCK ]]; }
+
+lock_source() {
+  if [[ -f $TOGGLE_LOCK ]]; then echo "explicit-on"
+  elif [[ -f $TOGGLE_NOLOCK ]]; then echo "explicit-off"
+  else echo "default-on"
+  fi
+}
 
 # Lock OFF must also suppress the suspend-time lock, not just the lid-close
 # immediate lock. Stock holds PrepareForSleep via omarchy-sleep-lock.service,
@@ -101,18 +116,20 @@ set_lid() {
 set_lock() {
   local action="$1"
   case "$action" in
-    on)
-      mkdir -p "$TOGGLES_DIR"
-      touch "$TOGGLE_LOCK"
-      ;;
-    off)
-      rm -f "$TOGGLE_LOCK"
-      ;;
+    on|off) ;;
     toggle|"")
-      if is_lock_on; then set_lock off; return; else set_lock on; return; fi
+      if is_lock_on; then action=off; else action=on; fi
       ;;
     *) fail "lock: expected on|off|toggle, got '$action'" ;;
   esac
+  mkdir -p "$TOGGLES_DIR"
+  if [[ $action == on ]]; then
+    touch "$TOGGLE_LOCK"
+    rm -f "$TOGGLE_NOLOCK"
+  else
+    touch "$TOGGLE_NOLOCK"
+    rm -f "$TOGGLE_LOCK"
+  fi
   sync_sleep_lock
 }
 
@@ -137,7 +154,7 @@ cmd_status() {
   else
     printf 'lid-ignore: %s\n' "$([ "$active" = true ] && echo on || echo off)"
     printf 'inhibit:    %s\n' "$([ "$inhibit" = true ] && echo active || echo inactive)"
-    printf 'lock-on-lid:%s\n' "$([ "$lock" = true ] && echo on || echo off)"
+    printf 'lock-on-lid:%s (%s)\n' "$([ "$lock" = true ] && echo on || echo off)" "$(lock_source)"
     if command -v systemctl >/dev/null 2>&1; then
       printf 'sleep-lock: %s\n' "$(systemctl --user is-active omarchy-sleep-lock.service 2>/dev/null || true)"
     fi
@@ -154,7 +171,7 @@ cmd_doctor() {
   local active inhibit
   is_ignore_on && active=true || active=false
   is_inhibit_active && inhibit=true || inhibit=false
-  echo "· lid-ignore: $active, inhibit: $inhibit, lock-on-lid: $(is_lock_on && echo on || echo off)"
+  echo "· lid-ignore: $active, inhibit: $inhibit, lock-on-lid: $(is_lock_on && echo on || echo off) ($(lock_source))"
 
   # Legacy (<0.2.0) systemd units: the Service owns the inhibitor now.
   local u leftovers=false
@@ -217,7 +234,7 @@ Usage: $SELF <command> [args]
 
   status [--json]          show lid state
   lid on|off|toggle        inhibit lid suspend (keep working closed)
-  lock on|off|toggle       lock on lid close and suspend (default off)
+  lock on|off|toggle       lock on lid close and suspend (default on)
   doctor                   reconcile toggle vs inhibitor, drop legacy units
   remove                   remove plugin-owned files, then remove the plugin
 USAGE
