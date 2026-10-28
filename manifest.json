@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.tymurbogach.sleepwalker",
   "name": "Sleepwalker",
-  "version": "0.5.0",
+  "version": "0.5.2",
   "author": "tymurbogach",
   "license": "MIT",
   "description": "Close the lid. Keep working. Lock optional.",
@@ -54,7 +54,7 @@
           {
             "value": "Dnd",
             "label": "Do not disturb",
-            "description": "Notification silencing"
+            "description": "Left-click DND; right-click crash alerts with Notification Controls"
           },
           {
             "value": "StayAwake",

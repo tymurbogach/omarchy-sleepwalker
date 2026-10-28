@@ -36,7 +36,14 @@ systemd policy.
 When `Service.qml` is live, right-click calls `setLock()` directly. Otherwise
 it uses the bundled CLI fallback, with lid and lock writes serialized in order.
 
-## 1.2 Removal
+## 1.2 Notifications controls
+
+The DND indicator has two independent controls. Left-click changes Omarchy's
+DND setting. Right-click calls the separate Notification Controls plugin and
+reads the `crash-capture-off` flag for its tooltip. Without that plugin, the
+right-click action is unavailable. Sleepwalker does not own the flag.
+
+## 1.3 Removal
 
 `omarchy-sleepwalker remove` runs the installed uninstaller with
 `--remove-plugin`. It removes plugin-owned external files before it asks

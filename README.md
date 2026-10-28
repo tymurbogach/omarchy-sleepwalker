@@ -17,6 +17,8 @@ Needs: Omarchy 4 · a laptop with a lid switch (does nothing on desktops) ·
 |---|---|
 | **Left-click Laptop** | Switch Working ON or OFF. |
 | **Right-click Laptop** | Switch Lock 🔒 ON or OFF. When ON, opening the lid requires your password. |
+| **Left-click notifications** | Switch ordinary notification silencing (DND) ON or OFF. |
+| **Right-click notifications** | Switch Omarchy crash alerts ON or OFF when Notification Controls is installed. |
 
 ## Install
 
@@ -29,6 +31,9 @@ omarchy-sleepwalker lid on
 - Always pass `--yes`: the entry inherits the stock strip slot.
 - The setup script adds the CLI, lid-close shim, and pinned lid binding.
 - Everything lives inside `$HOME`: no sudo, no system service.
+
+For the notification indicator's right-click crash alert action, install the
+separate [Notification Controls plugin](https://github.com/tymurbogach/omarchy-notifications-toggle).
 
 The final command enables Working. Close the lid: the panel goes off and work
 continues.
@@ -52,6 +57,12 @@ again (or `lock on`) to return to stock.
 No separate widget, no oversized icon: Sleepwalker **is** Omarchy's
 indicator strip with a 7th entry — same size, same dim-when-off, same
 hover-reveal as the other six.
+
+With the separate Notification Controls plugin installed, the notifications
+indicator also controls crash alerts with a right-click.
+Omarchy stores that setting in `~/.local/state/omarchy/toggles/crash-capture-off`.
+Notification Controls runs `omarchy toggle crash capture`, which starts or
+stops the user crash watcher. The two click actions remain independent.
 
 Lock applies in both modes and defaults to **ON** (stock behavior). `lock off`
 records an explicit opt-out: it stops `omarchy-sleep-lock.service` (user

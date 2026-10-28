@@ -39,7 +39,7 @@ OMARCHY_SRC="${OMARCHY_PATH:-/usr/share/omarchy}"
 
 # --- refresh derived files from Omarchy's current source -------------------
 # Indicators.qml is a clone of stock plus three documented patches (see the file
-# header). The six sibling indicators are verbatim copies. Re-run after an
+# header). Dnd.qml is customized; the other five sibling indicators are stock. Re-run after an
 # Omarchy update so the strip never becomes a frozen fork.
 sync_stock() {
   local src_widget="$OMARCHY_SRC/shell/plugins/bar/widgets/Indicators.qml"
@@ -77,10 +77,10 @@ sync_stock() {
   grep -q 'target: "omarchy.indicators"' "$HERE/Indicators.qml" && { echo "patch 3 did not apply — aborting" >&2; exit 1; } || true
 
   local f
-  for f in Dictation Dnd NightLight Reminder ScreenRecording StayAwake; do
+  for f in Dictation NightLight Reminder ScreenRecording StayAwake; do
     cp -f "$src_ind/$f.qml" "$HERE/indicators/$f.qml"
   done
-  echo "· stock refreshed (Indicators.qml + 6 indicators); Laptop.qml untouched"
+  echo "· stock refreshed (Indicators.qml + 5 indicators); Dnd.qml and Laptop.qml untouched"
 }
 
 if [[ ${1:-} == "--sync-stock" ]]; then

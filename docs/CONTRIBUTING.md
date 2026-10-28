@@ -77,9 +77,10 @@ Three moving parts, one shared state directory, no polling:
   when that is available. When the service is unreachable, it falls back to
   the bundled CLI (`bin/omarchy-sleepwalker`, resolved relative to the plugin,
   never through `PATH`) plus a 30 s poll.
-  `indicators/{Dictation,Dnd,NightLight,Reminder,ScreenRecording,StayAwake}.qml`
-  are verbatim copies of the stock indicators, which `--sync-stock` also
-  refreshes. Do not edit them by hand either.
+  `indicators/Dnd.qml` keeps the stock left-click DND action and calls the
+  separate Notification Controls plugin on right-click. `--sync-stock` leaves it
+  untouched. The other five sibling indicators are stock copies; refresh
+  those through `--sync-stock`.
 - **`bin/omarchy-sleepwalker`** is the user-facing CLI (`status`,
   `lid on|off|toggle`, `lock on|off|toggle`, `doctor`). It reads and writes
   the same state files as `Service.qml` and `Laptop.qml`, so all three views
