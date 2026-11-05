@@ -19,6 +19,7 @@ Needs: Omarchy 4 · a laptop with a lid switch (does nothing on desktops) ·
 | **Right-click Laptop** | Switch Lock 🔒 ON or OFF. When ON, opening the lid requires your password. |
 | **Left-click notifications** | Switch ordinary notification silencing (DND) ON or OFF. |
 | **Right-click notifications** | Switch Omarchy crash alerts ON or OFF when Notification Controls is installed. |
+| **Right-click Stay Awake** | Choose the terminal or GPU Matrix rain screensaver. |
 
 ## Install
 

@@ -69,7 +69,7 @@
           {
             "value": "StayAwake",
             "label": "Stay awake",
-            "description": "Idle lock and screensaver override"
+            "description": "Idle override; right-click selects Matrix rain"
           },
           {
             "value": "Laptop",
