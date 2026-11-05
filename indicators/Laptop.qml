@@ -41,7 +41,7 @@ BarIndicator {
   OpticalGlyph {
     id: laptopGlyph
     anchors.centerIn: parent
-    anchors.verticalCenterOffset: root.vertical ? 0 : Style.spaceReal(0.75)
+    anchors.verticalCenterOffset: root.vertical ? 0 : Style.spaceReal(0.25)
     width: Style.bar.iconCanvas
     height: Style.bar.iconCanvas
     text: root.text
@@ -54,7 +54,7 @@ BarIndicator {
     transform: Scale {
       origin.x: laptopGlyph.width / 2
       origin.y: laptopGlyph.height / 2
-      yScale: root.vertical ? 1 : 1.3
+      yScale: root.vertical ? 1 : 1.4
     }
   }
   activeTooltipText: lockOnLid ? "Lock  ON " : "Lock  OFF"
