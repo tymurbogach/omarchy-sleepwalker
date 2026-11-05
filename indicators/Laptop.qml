@@ -33,23 +33,9 @@ BarIndicator {
   active: svcAvailable ? (sleepService.lidOn === true) : probedOn
   readonly property bool lockOnLid: svcAvailable ? (sleepService.lockOnLid === true) : probedLockOn
   readonly property bool fallbackBusy: fallbackActionProc.running || fallbackActions.length > 0
-  // A wide laptop needs a slightly larger canvas to match nearby icons.
-  activeText: ""
-  inactiveText: ""
-  foreground: "transparent"
-
-  OpticalGlyph {
-    anchors.centerIn: parent
-    width: Style.bar.iconCanvas
-    height: Style.bar.iconCanvas
-    text: root.text
-    fontFamily: root.fontFamily
-    fontSize: root.fontSize
-    paintedSize: Math.min(Style.bar.iconCanvas, Style.bar.iconSize + Style.space(2))
-    color: root.bar ? root.bar.barForeground : Color.foreground
-    rotation: root.textRotation
-    scale: root.pressScale
-  }
+  // The code mark fills the laptop screen and balances the nearby icons.
+  activeText: ""
+  inactiveText: ""
   activeTooltipText: lockOnLid ? "Lock  ON " : "Lock  OFF"
   inactiveTooltipText: lockOnLid ? "Lock  ON " : "Lock  OFF"
   // Keep the inactive slot interactive while the pointer remains over it.
