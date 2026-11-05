@@ -7,6 +7,8 @@ import qs.Ui
 // renders at the same 21px slot / 10pt caption size as Dictation, StayAwake…
 BarIndicator {
   id: root
+  // The laptop outline is wide and appears smaller than the other glyphs.
+  scale: 1.2
 
   // Live service owned by this same plugin (Service.qml). The bar facade
   // allows a widget its own service id, so this is reactive: no polling.
@@ -33,9 +35,9 @@ BarIndicator {
   active: svcAvailable ? (sleepService.lidOn === true) : probedOn
   readonly property bool lockOnLid: svcAvailable ? (sleepService.lockOnLid === true) : probedLockOn
   readonly property bool fallbackBusy: fallbackActionProc.running || fallbackActions.length > 0
-  // FA laptop mono-glyph — with chassis, same height/centering as others
-  activeText: ""
-  inactiveText: ""
+  // Use a taller laptop glyph so its visual weight matches the other indicators.
+  activeText: "󰌢"
+  inactiveText: "󰌢"
   activeTooltipText: lockOnLid ? "Lock  ON " : "Lock  OFF"
   inactiveTooltipText: lockOnLid ? "Lock  ON " : "Lock  OFF"
   // Keep the inactive slot interactive while the pointer remains over it.
