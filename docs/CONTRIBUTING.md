@@ -66,10 +66,10 @@ Three moving parts, one shared state directory, no polling:
   before it signals a process.
 - **`Indicators.qml`** (entry point `barWidget`) is a clone of the stock
   Omarchy indicator strip (`$OMARCHY_PATH/shell/plugins/bar/widgets/Indicators.qml`).
-  `install.sh --sync-stock` regenerates it with three documented patches (see
-  the header comment of the file): a fix for the relative import path,
-  `Laptop` added to `defaultIndicatorEntries`, and the stock `IpcHandler`
-  removed to avoid a handler collision warning against the disabled built-in.
+  `install.sh --sync-stock` regenerates it with two documented patches (see
+  the header comment of the file): a fix for the relative import path and
+  `Laptop` added to `defaultIndicatorEntries`. The clone retains the stock IPC
+  handler so refresh requests reach its indicators.
   **Never hand-edit this file.** Always regenerate it.
 - **`indicators/Laptop.qml`** is the new indicator. Left-click changes the
   lid-ignore state. Right-click changes the lock-on-close state. It binds to
@@ -79,7 +79,7 @@ Three moving parts, one shared state directory, no polling:
   never through `PATH`) plus a 30 s poll.
   `indicators/Dnd.qml` keeps the stock left-click DND action and calls the
   separate Notification Controls plugin on right-click. `--sync-stock` leaves it
-  untouched. The other five sibling indicators are stock copies; refresh
+  untouched. The other stock sibling indicators are copies; refresh
   those through `--sync-stock`.
 - **`bin/omarchy-sleepwalker`** is the user-facing CLI (`status`,
   `lid on|off|toggle`, `lock on|off|toggle`, `doctor`). It reads and writes

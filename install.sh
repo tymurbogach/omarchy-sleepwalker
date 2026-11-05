@@ -45,7 +45,6 @@ sync_stock() {
   local src_widget="$OMARCHY_SRC/shell/plugins/bar/widgets/Indicators.qml"
   local src_ind="$OMARCHY_SRC/shell/plugins/bar/indicators"
   [[ -f $src_widget && -d $src_ind ]] || { echo "cannot find Omarchy's indicators source" >&2; exit 1; }
-  command -v perl >/dev/null || { echo "sync-stock needs perl" >&2; exit 1; }
 
   case "$(cat "$src_widget")" in
     *'Qt.resolvedUrl("../indicators/"'*) ;;
@@ -64,23 +63,19 @@ sync_stock() {
       '//   1. Qt.resolvedUrl("../indicators/" -> Qt.resolvedUrl("indicators/"' \
       '//      (in a clone both files sit at the top level; ".." points outside)' \
       '//   2. defaultIndicatorEntries gains "Laptop" (Sleepwalker lid behaviour).' \
-      '//   3. Stock IpcHandler (target "omarchy.indicators") removed: the disabled' \
-      '//      built-in keeps serving that target and nothing calls it, so keeping it' \
-      '//      only logged a handler-collision warning on every load.' \
+      '//   3. Retain stock IPC so indicator refresh requests reach this clone.' \
       ''
     sed -e 's|Qt\.resolvedUrl("\.\./indicators/"|Qt.resolvedUrl("indicators/"|' \
         -e 's|\(defaultIndicatorEntries: \[[^]]*[^ ]\) *\]|\1, "Laptop" ]|' \
-        "$src_widget" \
-    | perl -0777 -pe 's/  IpcHandler \{\n    target: "omarchy\.indicators"\n\n    function refresh\(\): void \{\n      root\.broadcast\("refresh"\)\n    \}\n  \}\n\n/  \/\/ (Stock IpcHandler removed — see header patch 3.)\n\n/'
+        "$src_widget"
   } > "$HERE/Indicators.qml"
   grep -q '"Laptop"' "$HERE/Indicators.qml" || { echo "patch 2 did not apply — aborting" >&2; exit 1; }
-  grep -q 'target: "omarchy.indicators"' "$HERE/Indicators.qml" && { echo "patch 3 did not apply — aborting" >&2; exit 1; } || true
 
   local f
-  for f in Dictation NightLight Reminder ScreenRecording StayAwake; do
+  for f in NightLight PasswordlessSudo RemoteSession Reminder ScreenRecording StayAwake; do
     cp -f "$src_ind/$f.qml" "$HERE/indicators/$f.qml"
   done
-  echo "· stock refreshed (Indicators.qml + 5 indicators); Dnd.qml and Laptop.qml untouched"
+  echo "· stock refreshed (Indicators.qml + 6 indicators); Dnd.qml and Laptop.qml untouched"
 }
 
 if [[ ${1:-} == "--sync-stock" ]]; then
