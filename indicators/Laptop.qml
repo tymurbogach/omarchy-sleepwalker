@@ -36,6 +36,27 @@ BarIndicator {
   // The code mark fills the laptop screen and balances the nearby icons.
   activeText: ""
   inactiveText: ""
+  // Keep the hit area unchanged while giving the wide glyph more height.
+  foreground: "transparent"
+  OpticalGlyph {
+    id: laptopGlyph
+    anchors.centerIn: parent
+    anchors.verticalCenterOffset: root.vertical ? 0 : Style.spaceReal(0.5)
+    width: Style.bar.iconCanvas
+    height: Style.bar.iconCanvas
+    text: root.text
+    fontFamily: root.fontFamily
+    fontSize: root.fontSize
+    paintedSize: Style.bar.iconSize
+    color: root.bar ? root.bar.barForeground : Color.foreground
+    rotation: root.textRotation
+    scale: root.pressScale
+    transform: Scale {
+      origin.x: laptopGlyph.width / 2
+      origin.y: laptopGlyph.height / 2
+      yScale: root.vertical ? 1 : 1.2
+    }
+  }
   activeTooltipText: lockOnLid ? "Lock  ON " : "Lock  OFF"
   inactiveTooltipText: lockOnLid ? "Lock  ON " : "Lock  OFF"
   // Keep the inactive slot interactive while the pointer remains over it.
