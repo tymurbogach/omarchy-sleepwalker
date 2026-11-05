@@ -33,9 +33,9 @@ BarIndicator {
   active: svcAvailable ? (sleepService.lidOn === true) : probedOn
   readonly property bool lockOnLid: svcAvailable ? (sleepService.lockOnLid === true) : probedLockOn
   readonly property bool fallbackBusy: fallbackActionProc.running || fallbackActions.length > 0
-  // Use a taller laptop glyph so its visual weight matches the other indicators.
-  activeText: "󰌢"
-  inactiveText: "󰌢"
+  // Use the laptop glyph with the standard bar icon size and centering.
+  activeText: ""
+  inactiveText: ""
   activeTooltipText: lockOnLid ? "Lock  ON " : "Lock  OFF"
   inactiveTooltipText: lockOnLid ? "Lock  ON " : "Lock  OFF"
   // Keep the inactive slot interactive while the pointer remains over it.
