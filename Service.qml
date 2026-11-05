@@ -51,8 +51,14 @@ Item {
   property bool stayAwake: false
   property bool remoteSession: false
 
+  property bool indicatorRefreshPending: false
   function refreshIndicatorStates() {
-    if (!indicatorProbe.running && !indicatorAction.running) indicatorProbe.running = true
+    if (indicatorProbe.running || indicatorAction.running) {
+      indicatorRefreshPending = true
+      return
+    }
+    indicatorRefreshPending = false
+    indicatorProbe.running = true
   }
 
   function toggleIndicator(target) {
@@ -65,6 +71,9 @@ Item {
   Process {
     id: indicatorProbe
     command: ["bash", "-c", 'omarchy-shell nightlight status; omarchy-shell notifications isDnd; omarchy-shell idle status; if pgrep -x -u "$UID" gliff-server >/dev/null; then echo remote-on; else echo remote-off; fi']
+    onExited: {
+      if (root.indicatorRefreshPending) Qt.callLater(root.refreshIndicatorStates)
+    }
     stdout: SplitParser {
       onRead: function(line) {
         var text = String(line).trim()
