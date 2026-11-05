@@ -7,8 +7,6 @@ import qs.Ui
 // renders at the same 21px slot / 10pt caption size as Dictation, StayAwake…
 BarIndicator {
   id: root
-  // The laptop outline is wide and appears smaller than the other glyphs.
-  scale: 1.15
 
   // Live service owned by this same plugin (Service.qml). The bar facade
   // allows a widget its own service id, so this is reactive: no polling.
