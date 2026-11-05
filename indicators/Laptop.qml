@@ -33,30 +33,9 @@ BarIndicator {
   active: svcAvailable ? (sleepService.lidOn === true) : probedOn
   readonly property bool lockOnLid: svcAvailable ? (sleepService.lockOnLid === true) : probedLockOn
   readonly property bool fallbackBusy: fallbackActionProc.running || fallbackActions.length > 0
-  // Use the original laptop glyph with a taller outline.
-  activeText: ""
-  inactiveText: ""
-  // Keep the hit area unchanged while giving the wide glyph more height.
-  foreground: "transparent"
-  OpticalGlyph {
-    id: laptopGlyph
-    anchors.centerIn: parent
-    anchors.verticalCenterOffset: root.vertical ? 0 : Style.spaceReal(0.25)
-    width: Style.bar.iconCanvas
-    height: Style.bar.iconCanvas
-    text: root.text
-    fontFamily: root.fontFamily
-    fontSize: root.fontSize
-    paintedSize: Style.bar.iconSize
-    color: root.bar ? root.bar.barForeground : Color.foreground
-    rotation: root.textRotation
-    scale: root.pressScale
-    transform: Scale {
-      origin.x: laptopGlyph.width / 2
-      origin.y: laptopGlyph.height / 2
-      yScale: root.vertical ? 1 : 1.4
-    }
-  }
+  // Use the power-sleep glyph for the lid control.
+  activeText: "󰤄"
+  inactiveText: "󰤄"
   activeTooltipText: lockOnLid ? "Lock  ON " : "Lock  OFF"
   inactiveTooltipText: lockOnLid ? "Lock  ON " : "Lock  OFF"
   // Keep the inactive slot interactive while the pointer remains over it.
