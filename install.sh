@@ -72,10 +72,10 @@ sync_stock() {
   grep -q '"Laptop"' "$HERE/Indicators.qml" || { echo "patch 2 did not apply — aborting" >&2; exit 1; }
 
   local f
-  for f in NightLight PasswordlessSudo RemoteSession Reminder ScreenRecording StayAwake; do
+  for f in PasswordlessSudo Reminder ScreenRecording; do
     cp -f "$src_ind/$f.qml" "$HERE/indicators/$f.qml"
   done
-  echo "· stock refreshed (Indicators.qml + 6 indicators); Dnd.qml and Laptop.qml untouched"
+  echo "· stock refreshed (Indicators.qml + 3 indicators); custom indicators untouched"
 }
 
 if [[ ${1:-} == "--sync-stock" ]]; then

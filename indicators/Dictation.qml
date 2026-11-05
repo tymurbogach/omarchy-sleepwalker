@@ -24,7 +24,7 @@ BarIndicator {
   }
 
   Process {
-    command: ["bash", "-c", "omarchy-voxtype-status"]
+    command: ["voxtype", "status", "--follow", "--format", "json", "--icon-theme", "omarchy"]
     running: true
     stdout: SplitParser {
       onRead: function(data) { root.update(data) }

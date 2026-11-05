@@ -7,8 +7,8 @@ import qs.Ui
 BarIndicator {
   id: root
 
-  readonly property var notificationService: bar && bar.shell ? bar.shell.firstPartyServiceFor("omarchy.notifications") : null
-  readonly property bool dnd: notificationService ? notificationService.doNotDisturb : false
+  readonly property var sleepService: bar?.shell?.serviceFor("io.github.tymurbogach.sleepwalker")
+  readonly property bool dnd: sleepService ? sleepService.dndOn : false
   property bool crashAlertsOff: false
   property bool crashStateLoaded: false
   property bool crashControlAvailable: false
@@ -96,8 +96,8 @@ BarIndicator {
       crashToggle.running = true
     } else if (button === Qt.RightButton && !serviceProbe.running) {
       serviceProbe.running = true
-    } else if (button === Qt.LeftButton && root.notificationService) {
-      root.notificationService.setDoNotDisturb(!root.notificationService.doNotDisturb)
+    } else if (button === Qt.LeftButton && root.sleepService) {
+      root.sleepService.toggleIndicator("notifications")
     }
   }
 }

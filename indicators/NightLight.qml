@@ -5,16 +5,16 @@ import qs.Ui
 BarIndicator {
   id: root
 
-  readonly property var nightlightService: bar?.shell?.firstPartyServiceFor("omarchy.nightlight")
+  readonly property var sleepService: bar?.shell?.serviceFor("io.github.tymurbogach.sleepwalker")
 
-  active: nightlightService ? nightlightService.enabled : false
+  active: sleepService ? sleepService.nightlightOn : false
   activeText: "󰔎"
   inactiveText: "󰔎"
   activeTooltipText: I18n.t("bar.dayLight")
   inactiveTooltipText: I18n.t("bar.nightLight")
 
   function toggle() {
-    if (root.nightlightService) root.nightlightService.setNightlight(!root.active)
+    if (root.sleepService) root.sleepService.toggleIndicator("nightlight")
   }
 
   onPressed: function() { root.toggle() }

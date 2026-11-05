@@ -44,6 +44,50 @@ Item {
   property bool stateLoaded: false
   readonly property string inhibitorToken: String(Date.now()) + "-" + String(Math.random()).replace(".", "")
 
+  // Omarchy exposes these services through IPC to third-party widgets.
+  // Poll every five seconds to reflect changes made outside this plugin.
+  property bool nightlightOn: false
+  property bool dndOn: false
+  property bool stayAwake: false
+  property bool remoteSession: false
+
+  function refreshIndicatorStates() {
+    if (!indicatorProbe.running && !indicatorAction.running) indicatorProbe.running = true
+  }
+
+  function toggleIndicator(target) {
+    if (indicatorAction.running || ["nightlight", "notifications", "idle"].indexOf(target) < 0) return
+    indicatorAction.command = ["omarchy-shell", target, target === "notifications" ? "toggleDnd" : "toggle"]
+    indicatorAction.running = true
+  }
+
+  Timer { interval: 5000; repeat: true; running: true; triggeredOnStart: true; onTriggered: root.refreshIndicatorStates() }
+  Process {
+    id: indicatorProbe
+    command: ["bash", "-c", 'omarchy-shell nightlight status; omarchy-shell notifications isDnd; omarchy-shell idle status; if pgrep -x -u "$UID" gliff-server >/dev/null; then echo remote-on; else echo remote-off; fi']
+    stdout: SplitParser {
+      onRead: function(line) {
+        var text = String(line).trim()
+        if (text === "remote-on" || text === "remote-off") root.remoteSession = text === "remote-on"
+        else if (text === "on" || text === "off") root.dndOn = text === "on"
+        else {
+          try {
+            var data = JSON.parse(text)
+            if (typeof data.stayAwake === "boolean") root.stayAwake = data.stayAwake
+            else if (typeof data.enabled === "boolean") root.nightlightOn = data.enabled
+          } catch (error) { console.warn("Sleepwalker: invalid indicator status", text) }
+        }
+      }
+    }
+  }
+  Process {
+    id: indicatorAction
+    onExited: function(code) {
+      if (code !== 0) console.warn("Sleepwalker: indicator action failed", code)
+      Qt.callLater(root.refreshIndicatorStates)
+    }
+  }
+
   function shQuote(path) {
     return "'" + String(path).split("'").join("'\"'\"'") + "'"
   }
@@ -179,6 +223,10 @@ Item {
     target: "sleepwalker"
 
     function status(): string { return root.statusJson() }
+    function indicatorStatus(): string {
+      return JSON.stringify({ nightlight: root.nightlightOn, dnd: root.dndOn, stayAwake: root.stayAwake })
+    }
+    function toggleIndicator(target: string): void { root.toggleIndicator(target) }
     function toggle(): string { root.toggleLid(); return root.statusJson() }
     function lid(desired: string): string {
       if (desired === "on") root.setLid(true)

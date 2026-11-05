@@ -5,9 +5,9 @@ import qs.Ui
 BarIndicator {
   id: root
 
-  readonly property var idleService: bar?.shell?.firstPartyServiceFor("omarchy.idle")
+  readonly property var sleepService: bar?.shell?.serviceFor("io.github.tymurbogach.sleepwalker")
 
-  active: idleService ? idleService.stayAwake : false
+  active: sleepService ? sleepService.stayAwake : false
   // A mug without a saucer, which drew a line under the cup.
   activeText: ""
   inactiveText: ""
@@ -15,7 +15,7 @@ BarIndicator {
   inactiveTooltipText: I18n.t("bar.stayAwake")
 
   function toggle() {
-    if (root.idleService) root.idleService.setIdleEnabled(root.active)
+    if (root.sleepService) root.sleepService.toggleIndicator("idle")
   }
 
   onPressed: function() { root.toggle() }

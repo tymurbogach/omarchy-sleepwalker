@@ -77,9 +77,10 @@ Three moving parts, one shared state directory, no polling:
   when that is available. When the service is unreachable, it falls back to
   the bundled CLI (`bin/omarchy-sleepwalker`, resolved relative to the plugin,
   never through `PATH`) plus a 30 s poll.
-  `indicators/Dnd.qml` keeps the stock left-click DND action and calls the
+  `indicators/Dnd.qml` keeps the left-click DND action and calls the
   separate Notification Controls plugin on right-click. `--sync-stock` leaves it
-  untouched. The other stock sibling indicators are copies; refresh
+  untouched. NightLight and StayAwake use the Sleepwalker IPC bridge.
+  Dictation follows Voxtype directly. The other stock indicators are copies; refresh
   those through `--sync-stock`.
 - **`bin/omarchy-sleepwalker`** is the user-facing CLI (`status`,
   `lid on|off|toggle`, `lock on|off|toggle`, `doctor`). It reads and writes

@@ -55,11 +55,14 @@ Lock defaults to **ON** (stock behavior). Right-click the Laptop indicator
 again (or `lock on`) to return to stock.
 
 No separate widget, no oversized icon: Sleepwalker **is** Omarchy's
-indicator strip with a 7th entry — same size, same dim-when-off, same
+indicator strip with a Laptop entry — same size, same dim-when-off, same
 hover-reveal as the other six.
 
 With the separate Notification Controls plugin installed, the notifications
 indicator also controls crash alerts with a right-click.
+
+Sleepwalker checks Omarchy indicator states every five seconds while enabled.
+This keeps external changes visible in the bar.
 Omarchy stores that setting in `~/.local/state/omarchy/toggles/crash-capture-off`.
 Notification Controls runs `omarchy toggle crash capture`, which starts or
 stops the user crash watcher. The two click actions remain independent.
