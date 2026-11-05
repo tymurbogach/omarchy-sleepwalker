@@ -33,15 +33,15 @@ BarIndicator {
   active: svcAvailable ? (sleepService.lidOn === true) : probedOn
   readonly property bool lockOnLid: svcAvailable ? (sleepService.lockOnLid === true) : probedLockOn
   readonly property bool fallbackBusy: fallbackActionProc.running || fallbackActions.length > 0
-  // The code mark fills the laptop screen and balances the nearby icons.
-  activeText: ""
-  inactiveText: ""
+  // Use the original laptop glyph with a taller outline.
+  activeText: ""
+  inactiveText: ""
   // Keep the hit area unchanged while giving the wide glyph more height.
   foreground: "transparent"
   OpticalGlyph {
     id: laptopGlyph
     anchors.centerIn: parent
-    anchors.verticalCenterOffset: root.vertical ? 0 : Style.spaceReal(0.5)
+    anchors.verticalCenterOffset: root.vertical ? 0 : Style.spaceReal(0.75)
     width: Style.bar.iconCanvas
     height: Style.bar.iconCanvas
     text: root.text
@@ -54,7 +54,7 @@ BarIndicator {
     transform: Scale {
       origin.x: laptopGlyph.width / 2
       origin.y: laptopGlyph.height / 2
-      yScale: root.vertical ? 1 : 1.2
+      yScale: root.vertical ? 1 : 1.3
     }
   }
   activeTooltipText: lockOnLid ? "Lock  ON " : "Lock  OFF"
