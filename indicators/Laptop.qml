@@ -36,8 +36,8 @@ BarIndicator {
   // Use the power-sleep glyph for the lid control.
   activeText: "󰤄"
   inactiveText: "󰤄"
-  activeTooltipText: lockOnLid ? "Lid and suspend lock ON" : "Lid and suspend lock OFF; idle lock remains active"
-  inactiveTooltipText: lockOnLid ? "Lid and suspend lock ON" : "Lid and suspend lock OFF; idle lock remains active"
+  activeTooltipText: lockOnLid ? "Lock  ON " : "Lock  OFF"
+  inactiveTooltipText: lockOnLid ? "Lock  ON " : "Lock  OFF"
   // Keep the inactive slot interactive while the pointer remains over it.
   // A left-click can turn the indicator off under that same pointer.
   maintainIndicatorReveal: true
