@@ -46,9 +46,9 @@ downloads, builds, servers, and SSH sessions continue with the lid closed.
 
 | Working | Lock 🔒 | Result when you close the lid |
 |---|---|---|
-| **ON** | **OFF** | Panel off. No suspend, no hibernate, no lock. Keeps working. |
+| **ON** | **OFF** | Panel off. Work continues without a lid-triggered lock. Idle can still lock. |
 | **ON** | **ON** | Panel off and locked. Work continues. Opening the lid requires your password. |
-| **OFF** | **OFF** | Suspends, wakes unlocked. No password on open. |
+| **OFF** | **OFF** | Suspends without a suspend-triggered lock. Idle can still lock. |
 | **OFF** | **ON** | Suspends locked (stock). Opening the lid requires your password. |
 
 Lock defaults to **ON** (stock behavior). Right-click the Laptop indicator
@@ -72,8 +72,8 @@ Lock applies in both modes and defaults to **ON** (stock behavior). `lock off`
 records an explicit opt-out: it stops `omarchy-sleep-lock.service` (user
 unit) so any suspend — lid, menu, or power button — wakes unlocked;
 `lock on` returns to stock and starts it again.
-It does not change hibernate, idle, or screensaver policy: after a long
-sleep the stock `idle.lock` timeout can still lock the session.
+It does not change hibernate, idle, or screensaver policy. Omarchy can still
+lock the session after its idle timeout, including while the lid is closed.
 
 Upgrading from 0.4.x: that version treated a missing flag as OFF, so an
 explicit 0.4.x opt-out becomes default ON after this update (fail closed).

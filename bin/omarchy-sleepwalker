@@ -33,7 +33,7 @@ TOGGLE_IGNORE_LEGACY="$TOGGLES_DIR/lid-ignore"
 TOGGLE_LOCK="$TOGGLES_DIR/lid-lock"
 TOGGLE_NOLOCK="$TOGGLES_DIR/lock-off"
 INHIBIT_WHO="Omarchy Sleepwalker"
-LEGACY_UNITS=("omarchy-sleepwalker-inhibit.service" "omarchy-lid-inhibit.service")
+LEGACY_UNITS=("omarchy-sleepwalker-inhibit.service")
 
 fail() { echo "$SELF: $*" >&2; exit 1; }
 

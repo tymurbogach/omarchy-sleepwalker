@@ -23,7 +23,7 @@ ID="io.github.tymurbogach.sleepwalker"
 CLI="omarchy-sleepwalker"
 OLD_ID="io.github.tymurbogach.lid"
 OLD_CLI="omarchy-lid"
-LEGACY_UNITS=("omarchy-sleepwalker-inhibit.service" "omarchy-lid-inhibit.service")
+LEGACY_UNITS=("omarchy-sleepwalker-inhibit.service")
 
 command -v omarchy >/dev/null || { echo "this needs Omarchy" >&2; exit 1; }
 command -v jq >/dev/null || echo "warning: jq not found — Laptop icon and layout migration will be skipped" >&2
