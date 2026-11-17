@@ -2,7 +2,7 @@
 
 Omarchy Sleepwalker is an Omarchy plugin (`io.github.tymurbogach.sleepwalker`).
 It adds a "Laptop" indicator to the Omarchy bar. While the indicator is on,
-the plugin holds a `systemd-inhibit --what=handle-lid-switch`, so a closed lid
+the plugin holds a detached `systemd-inhibit --what=handle-lid-switch:sleep`, so a closed lid
 turns the panel off instead of suspending the laptop. It ships as a clone of
 the stock Omarchy indicator strip plus one new indicator, not as a separate
 bar widget. The contract lives in `docs/SPEC.md` — read it before changing
@@ -54,13 +54,15 @@ After an Omarchy update, refresh the clone of the stock indicators:
 Three moving parts, one shared state directory, no polling:
 
 - **`Service.qml`** (entry point `service`, `IpcHandler` target
-  `sleepwalker`) owns the lid-inhibit child process and the toggle state. It
-  holds `systemd-inhibit … sleep infinity` as a child `Process` exactly while
-  the toggle is on. There is no systemd unit, so `omarchy plugin add` alone is
+  `sleepwalker`) monitors the lid-inhibit block and the toggle state. It
+  launches `systemd-inhibit --what=handle-lid-switch:sleep … sleep infinity`
+  detached via `setsid` exactly when the toggle is on and logind shows no
+  block. There is no systemd unit, so `omarchy plugin add` alone is
   a working install. `runWrite` and `writerBusy` serialize the writes, so a
   fast second toggle waits in a queue instead of racing a second bash call
-  over the same state files. If the shell crashes while on, its inhibitor
-  child is orphaned (PPID 1): `lid off`, `doctor` and `uninstall.sh` reap it
+  over the same state files. Detached means a shell reload, crash or update
+  never drops the block on a lid-closed laptop: the grandchild reparents to
+  init and survives. `lid off`, `doctor` and `uninstall.sh` reap it
   through the PID and private token written by the inhibitor wrapper, because
   a restart alone never kills it. The reaper verifies the exact argv and token
   before it signals a process.

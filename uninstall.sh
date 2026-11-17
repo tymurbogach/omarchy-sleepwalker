@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Undoes what install.sh did (CLI + shim + legacy), and clears toggles.
+# Undoes what install.sh did (CLI + inhibitor wrapper + shim + legacy), and clears toggles.
 #   ./uninstall.sh                 keep the installed plugin directory
 #   ./uninstall.sh --remove-plugin remove it after external cleanup
 set -uo pipefail
@@ -67,8 +67,8 @@ for u in "${LEGACY_UNITS[@]}"; do
 done
 systemctl --user daemon-reload >/dev/null 2>&1 || true
 
-echo "· removing CLI and lid-close shim (only if ours)"
-for f in "$BIN_DIR/$CLI" "$BIN_DIR/${CLI}-uninstall" "$BIN_DIR/$OLD_CLI" "$BIN_DIR/${OLD_CLI}-uninstall"; do
+echo "· removing CLI, inhibitor wrapper and lid-close shim (only if ours)"
+for f in "$BIN_DIR/$CLI" "$BIN_DIR/${CLI}-uninstall" "$BIN_DIR/omarchy-sleepwalker-inhibit" "$BIN_DIR/$OLD_CLI" "$BIN_DIR/${OLD_CLI}-uninstall"; do
   if [[ -f $f || -L $f ]]; then
     if ours "$f" || [[ -L $f && $(basename "$(readlink "$f")") == "$CLI" ]]; then rm -f "$f"; else echo "  leaving foreign $f alone" >&2; fi
   fi
@@ -201,10 +201,10 @@ if $REMOVE_PLUGIN; then
   else
     echo "· plugin directory already absent"
   fi
-  echo "  Removed (plugin, CLI, shim, toggles, legacy)."
+  echo "  Removed (plugin, CLI, inhibitor, shim, toggles, legacy)."
 else
   cat <<EOF
-  Removed (CLI, shim, toggles, legacy).
+  Removed (CLI, inhibitor, shim, toggles, legacy).
   Lid close is back to stock: suspend.
 
   To also remove the bar indicator now:

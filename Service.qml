@@ -2,7 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 
-// Sleepwalker service — owns the lid-close inhibitor and the toggle state.
+// Sleepwalker service — monitors the lid-close inhibitor and the toggle state.
 //
 // Single source of truth is files under ~/.local/state/omarchy/toggles/:
 //   sleepwalker  presence = keep working with the lid closed (preferred)
@@ -18,9 +18,11 @@ import Quickshell.Io
 // on explicit opt-out; the service sync covers the PrepareForSleep path,
 // which calls the absolute stock path and cannot be shadowed.
 //
-// The inhibitor is a child `systemd-inhibit … sleep infinity` held while the
-// toggle is on — no systemd unit, no install step. `omarchy plugin add` alone
-// is a working install. The bar indicator (indicators/Laptop.qml, same plugin)
+// The inhibitor is detached (`setsid systemd-inhibit --what=handle-lid-switch:sleep
+// … sleep infinity`). The Service and the CLI only launch and reap it; neither
+// owns it as a child, so shell reloads, crashes and updates never drop the
+// block on a lid-closed laptop. `omarchy plugin add` alone is a working
+// install. The bar indicator (indicators/Laptop.qml, same plugin)
 // binds to lidOn/lockOnLid reactively; the bundled CLI edits the same files
 // for terminal use, so all three always agree.
 
@@ -42,6 +44,7 @@ Item {
   property bool lidOn: false
   property bool lockOnLid: false
   property bool stateLoaded: false
+  property bool inhibitActive: false
   readonly property string inhibitorToken: String(Date.now()) + "-" + String(Math.random()).replace(".", "")
 
   // Omarchy exposes these services through IPC to third-party widgets.
@@ -135,6 +138,10 @@ Item {
     if (on) cmd += "touch " + shQuote(root.lidToggle) + "; rm -f " + shQuote(root.lidToggleLegacy)
     else cmd += "rm -f " + shQuote(root.lidToggle) + " " + shQuote(root.lidToggleLegacy)
     runWrite(cmd)
+    // The inhibitor is detached: launch on ON at once, reap on OFF.
+    // Never owned as a child, so reloads cannot drop it mid-close.
+    if (on) root.ensureInhibit()
+    else if (reapProc.running !== true) reapProc.running = true
   }
 
   function toggleLid() {
@@ -160,13 +167,25 @@ Item {
   function statusJson() {
     return JSON.stringify({
       active: lidOn === true,
-      inhibitActive: inhibitProc.running === true,
+      inhibitActive: inhibitActive === true,
       lockOnLid: lockOnLid === true
     })
   }
 
+  // Detached ensure: launch only when the toggle wants it and logind shows
+  // no block yet. Idempotent across reloads — never stacks duplicates.
+  function ensureInhibit() {
+    if (ensureProc.running === true) return
+    ensureProc.running = true
+  }
+
   Component.onCompleted: {
     refresh()
+    // Fail-closed startup: the toggle persists across reboots and reloads but
+    // the inhibitor does not. If the files ask for Working, ensure the block
+    // at once instead of waiting for the first probe round-trip. The ensure
+    // script rechecks files and logind, so a fresh install launches nothing.
+    ensureInhibit()
     // Reboot restores omarchy-sleep-lock.service (enabled) even on explicit
     // OFF. Re-apply the flag once at load through the writer queue, so a
     // toggle racing startup lands after this one-shot instead of before it.
@@ -178,7 +197,8 @@ Item {
     id: probe
     command: ["bash", "-c",
       "if [[ -f " + root.shQuote(root.lidToggle) + " || -f " + root.shQuote(root.lidToggleLegacy) + " ]]; then echo lid=on; else echo lid=off; fi; "
-      + "if [[ -f " + root.shQuote(root.lockOffToggle) + " && ! -f " + root.shQuote(root.lockToggle) + " ]]; then echo lock=off; else echo lock=on; fi"]
+      + "if [[ -f " + root.shQuote(root.lockOffToggle) + " && ! -f " + root.shQuote(root.lockToggle) + " ]]; then echo lock=off; else echo lock=on; fi; "
+      + "if systemd-inhibit --list 2>/dev/null | grep -qF 'Omarchy Sleepwalker'; then echo inhibit=on; else echo inhibit=off; fi"]
     stdout: SplitParser {
       onRead: function(line) {
         var text = String(line).trim()
@@ -188,10 +208,19 @@ Item {
         else if (text === "lid=off") { if (!root.writerBusy) root.lidOn = false }
         else if (text === "lock=on") { if (!root.writerBusy) root.lockOnLid = true }
         else if (text === "lock=off") { if (!root.writerBusy) root.lockOnLid = false }
+        else if (text === "inhibit=on") root.inhibitActive = true
+        else if (text === "inhibit=off") root.inhibitActive = false
       }
     }
     onExited: function() {
       root.stateLoaded = true
+      // Self-heal without a shell restart: toggle on but logind shows no
+      // block (reload gap, crash, manual kill) → relaunch detached.
+      // Toggle off but stray block remains → reap by verified token.
+      if (!root.writerBusy) {
+        if (root.lidOn === true && root.inhibitActive !== true) root.ensureInhibit()
+        else if (root.lidOn !== true && root.inhibitActive === true && reapProc.running !== true) reapProc.running = true
+      }
       if (root.pendingRefresh) {
         root.pendingRefresh = false
         root.refresh()
@@ -212,12 +241,20 @@ Item {
     }
   }
 
-  // The inhibitor itself. Held exactly while the toggle is on; released the
-  // moment it flips off or this service unloads (disable/remove/restart).
+  // The inhibitor is detached. These one-shots launch and reap it; the
+  // Service never owns it as a child, so unload (disable/remove/restart)
+  // cannot drop the block on a lid-closed laptop.
   Process {
-    id: inhibitProc
-    running: root.lidOn
-    command: [root.inhibitor, root.inhibitorToken]
+    id: ensureProc
+    command: ["bash", "-c",
+      "if [[ -f " + root.shQuote(root.lidToggle) + " || -f " + root.shQuote(root.lidToggleLegacy) + " ]]; then "
+      + "if ! systemd-inhibit --list 2>/dev/null | grep -qF 'Omarchy Sleepwalker'; then "
+      + root.shQuote(root.inhibitor) + " " + root.inhibitorToken + " >/dev/null 2>&1 || true; fi; fi"]
+  }
+
+  Process {
+    id: reapProc
+    command: [root.inhibitor, "--reap"]
   }
 
   FileView {

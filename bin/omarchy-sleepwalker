@@ -19,9 +19,10 @@
 # Lock OFF additionally stops omarchy-sleep-lock.service (user unit) so any
 # suspend wakes unlocked; lock ON starts it again. See sync_sleep_lock().
 #
-# The inhibitor itself is held by the plugin's Service.qml as a child
-# `systemd-inhibit … sleep infinity` while the toggle is on — no systemd unit,
-# so `omarchy plugin add` alone is a working install.
+# The inhibitor is detached (setsid) so it survives shell reloads, crashes
+# and updates. The CLI launches it on `lid on` and reaps it on `lid off`;
+# Service.qml does the same on load. No systemd unit, so `omarchy plugin add`
+# alone is a working install.
 
 set -euo pipefail
 
@@ -66,12 +67,29 @@ sync_sleep_lock() {
 }
 
 # The Service-held inhibitor shows in logind with our --who string.
+# NOTE: no `grep -q` pipe here. With `set -o pipefail`, grep quits on the
+# first match, systemd-inhibit dies of SIGPIPE, and the pipeline reports
+# failure despite the match. Compare the full output as a string instead.
 is_inhibit_active() {
-  systemd-inhibit --list 2>/dev/null | grep -qF "$INHIBIT_WHO"
+  local list
+  list="$(systemd-inhibit --list 2>/dev/null || true)"
+  [[ $list == *"$INHIBIT_WHO"* ]]
 }
 
-# After `lid on` the Service spawns the inhibitor reactively; on a fresh
-# install it may not be loaded yet. Wait briefly, then point at doctor.
+# The inhibitor is detached, so the CLI and the Service can both ensure it
+# without owning it. Launch is idempotent: skip when logind already shows us.
+launch_inhibit() {
+  local reaper token
+  command -v systemd-inhibit >/dev/null 2>&1 || return 0
+  is_inhibit_active && return 0
+  reaper="$(dirname "$0")/omarchy-sleepwalker-inhibit"
+  [[ -x $reaper ]] || return 0
+  token="$(date +%s%N)-$RANDOM$RANDOM"
+  "$reaper" "$token" >/dev/null 2>&1 || true
+}
+
+# After `lid on` the inhibitor is launched directly (detached) and the Service
+# ensures it again on load. Wait briefly, then point at doctor.
 # Without logind there is nothing to wait for: warn immediately.
 wait_inhibit() {
   is_ignore_on || return 0
@@ -101,6 +119,7 @@ set_lid() {
       mkdir -p "$TOGGLES_DIR"
       touch "$TOGGLE_IGNORE"
       rm -f "$TOGGLE_IGNORE_LEGACY"
+      launch_inhibit
       ;;
     off)
       rm -f "$TOGGLE_IGNORE" "$TOGGLE_IGNORE_LEGACY"
@@ -137,7 +156,10 @@ service_loaded() {
   # NOTE: `omarchy shell <target> <method>` is the routed form; the bare
   # `omarchy-shell shell …` variant answers "Function not found" for targets.
   # Match "active":true exactly: the key alone also appears when inactive.
-  omarchy shell sleepwalker status 2>/dev/null | grep -q '"active":true'
+  # No `grep -q` pipe: with `pipefail` it can SIGPIPE-fail on match (see above).
+  local out
+  out="$(omarchy shell sleepwalker status 2>/dev/null || true)"
+  [[ $out == *'"active":true'* ]]
 }
 
 cmd_status() {
@@ -173,11 +195,11 @@ cmd_doctor() {
   is_inhibit_active && inhibit=true || inhibit=false
   echo "· lid-ignore: $active, inhibit: $inhibit, lock-on-lid: $(is_lock_on && echo on || echo off) ($(lock_source))"
 
-  # Legacy (<0.2.0) systemd units: the Service owns the inhibitor now.
+  # Legacy (<0.2.0) systemd units: nothing owns the inhibitor as a child now.
   local u leftovers=false
   for u in "${LEGACY_UNITS[@]}"; do
     if [[ -f $HOME/.config/systemd/user/$u ]]; then
-      echo "· removing legacy unit $u (Service holds the inhibitor now)"
+      echo "· removing legacy unit $u (inhibitor is detached now)"
       systemctl --user disable --now "$u" >/dev/null 2>&1 || systemctl --user stop "$u" >/dev/null 2>&1 || true
       rm -f "$HOME/.config/systemd/user/$u"
       leftovers=true
@@ -186,17 +208,12 @@ cmd_doctor() {
   $leftovers && systemctl --user daemon-reload >/dev/null 2>&1 || true
 
   if [[ $active == true && $inhibit == false ]]; then
-    if service_loaded; then
-      echo "· service is loaded but holds no inhibitor — restarting shell to recover"
-      omarchy-restart-shell >/dev/null 2>&1 || true
-    else
-      echo "· fixing: plugin service not loaded — enabling $ID"
-      omarchy plugin enable "$ID" >/dev/null 2>&1 || echo "· enable it with: omarchy plugin enable $ID" >&2
-    fi
+    echo "· toggle on but no inhibitor — launching detached inhibitor"
+    launch_inhibit
+    wait_inhibit
   elif [[ $active == false && $inhibit == true ]]; then
-    echo "· stray inhibitor with toggle off — reaping orphans, then restarting shell to let the Service re-evaluate"
+    echo "· stray inhibitor with toggle off — reaping orphans"
     reap_strays
-    omarchy-restart-shell >/dev/null 2>&1 || true
   else
     echo "· in sync"
   fi

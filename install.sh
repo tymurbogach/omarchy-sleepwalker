@@ -3,11 +3,14 @@
 #
 # The plugin itself needs no install step: `omarchy plugin add <repo> --enable`
 # is a working install (indicator + inhibitor, straight from the store).
-# This script only does the three things the store cannot:
+# This script only does the things the store cannot:
 #   1. puts the CLI on PATH (~/.local/bin) for terminal use
-#   2. installs the lid-close shim (~/.local/bin/omarchy-system-lid-close)
+#   2. puts the detached inhibitor wrapper beside it (the CLI and the Service
+#      launch it from PATH; a plugin-relative lookup would break the moment
+#      the store path moves)
+#   3. installs the lid-close shim (~/.local/bin/omarchy-system-lid-close)
 #      so a closed lid powers off the panel WITHOUT locking (stock locks)
-#   3. pins the lid-close binding to the shim by absolute path
+#   4. pins the lid-close binding to the shim by absolute path
 #      (PATH order differs per exec context; systemd units would run stock)
 #
 # Everything is written inside $HOME. No sudo, no /usr, no services.
@@ -169,6 +172,7 @@ rm -f "$BIN_DIR/$OLD_CLI" "$BIN_DIR/${OLD_CLI}-uninstall" "$HOME/.config/omarchy
 echo "· $CLI in $BIN_DIR (terminal use)"
 mkdir -p "$BIN_DIR"
 install -m 755 "$HERE/bin/$CLI" "$BIN_DIR/$CLI"
+install -m 755 "$HERE/bin/omarchy-sleepwalker-inhibit" "$BIN_DIR/omarchy-sleepwalker-inhibit"
 install -m 755 "$HERE/uninstall.sh" "$BIN_DIR/${CLI}-uninstall"
 
 echo "· lid-close shim (closed lid: screen off, no lock, no suspend)"
@@ -363,7 +367,7 @@ fi
 
 cat <<EOF
 
-  Done. CLI + shim installed; the plugin itself comes from the store:
+  Done. CLI + inhibitor wrapper + shim installed; the plugin itself comes from the store:
 
     omarchy plugin add https://github.com/tymurbogach/omarchy-sleepwalker.git --enable --yes
 

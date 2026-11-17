@@ -54,20 +54,26 @@ path.
 
 ## 2. Inhibitor ownership
 
-Exactly one handle per live service: child
-`systemd-inhibit --what=handle-lid-switch --who="Omarchy Sleepwalker"
---why="Keep working lid closed" sleep infinity`, spawned by the binding
-`running: root.lidOn` in `Service.qml`. No systemd unit; `plugin add`
-alone is a working install.
+Detached, never a shell child: `setsid systemd-inhibit
+--what=handle-lid-switch:sleep --who="Omarchy Sleepwalker" --why="Keep working
+lid closed" sleep infinity`. The CLI launches it on `lid on` and the Service
+ensures it on load; both only launch when logind shows no block yet, so
+reloads never stack duplicates. No systemd unit; `plugin add` alone is a
+working install.
 
-Orphans: a shell crash reparents the child to PID 1 and the handle
-survives (logind ORs duplicates). The service never reaps on load —
-reaping on load would break the persistence in §1. Reapers verify the PID,
-private token, and exact arguments that the wrapper recorded. They run only
-when nothing should be held:
-`lid off`, `doctor` (stray branch), `uninstall.sh`.
-`status` reports the live child only; use `systemd-inhibit --list` to see
-orphans.
+Rationale: a `Service.qml`-owned child dies on every shell reload, crash and
+update. With the lid closed that gap suspends the laptop. Detached, the
+grandchild reparents to init and survives.
+
+Orphans: a crash or reload leaves the detached handle alive (logind ORs
+duplicates), which is the desired fail-closed behavior while the toggle is
+on. Reapers verify the PID, private token, and exact arguments that the
+wrapper recorded. They run only when nothing should be held: `lid off`,
+`doctor` (stray branch), `uninstall.sh`, plus the Service self-heal when the
+probe shows toggle off with a stray block. The Service never reaps on load
+while the toggle is on — reaping on load would break the persistence in §1.
+`status` reports the logind block, not a child process; use
+`systemd-inhibit --list` to confirm.
 
 ## 3. Shim delegation (`omarchy-system-lid-close`)
 
@@ -115,7 +121,7 @@ is lost.
 
 ## 6. IPC and CLI behavior
 
-- `target: sleepwalker`: `status()` (optimistic `lidOn` + live child),
+- `target: sleepwalker`: `status()` (optimistic `lidOn` + logind block),
   `toggle()`, `lid(on|off)` — anything else is an error, never a toggle.
 - CLI mirrors the files: `lid/lock on|off|toggle` (bare word = toggle),
   `status [--json]`, `doctor` (reconcile + legacy-unit cleanup + stray

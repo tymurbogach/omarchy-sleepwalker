@@ -1,13 +1,24 @@
 #!/usr/bin/env bash
+# omarchy-sleepwalker-inhibit — detached lid/sleep inhibitor
 # Own the one inhibitor that Sleepwalker starts.  A PID alone is not enough:
 # it can be reused after a crash.  The token stays in the child environment,
 # so reap verifies the PID, exact argv, and token before it sends a signal.
+#
+# The inhibitor is detached (setsid) so it survives omarchy-shell reloads,
+# crashes and updates. The Service and the CLI only launch and reap it;
+# neither owns it as a child process. A reload gap without an inhibitor
+# suspends a lid-closed laptop, so ownership by the shell is not acceptable.
 set -euo pipefail
 
 TOGGLES_DIR="${SLEEPWALKER_TOGGLES_DIR:-$HOME/.local/state/omarchy/toggles}"
 PID_FILE="$TOGGLES_DIR/sleepwalker-inhibit.pid"
 PROC_ROOT="${SLEEPWALKER_PROC_ROOT:-/proc}"
 KILL_BIN="${SLEEPWALKER_KILL_BIN:-/bin/kill}"
+# Block the lid switch and any sleep request while Working is on. A lid-closed
+# laptop must keep working through idle timeouts, not just the lid event.
+WHAT="handle-lid-switch:sleep"
+WHO="Omarchy Sleepwalker"
+WHY="Keep working lid closed"
 
 valid_token() { [[ "$1" =~ ^[A-Za-z0-9._-]{16,128}$ ]]; }
 
@@ -17,10 +28,47 @@ owns_pid() {
   [[ -r "$proc/cmdline" && -r "$proc/environ" ]] || return 1
   mapfile -d '' -t argv < "$proc/cmdline"
   [[ ${#argv[@]} -eq 6 ]] || return 1
-  [[ "${argv[0]}" == "systemd-inhibit" && "${argv[1]}" == "--what=handle-lid-switch" \
-     && "${argv[2]}" == "--who=Omarchy Sleepwalker" && "${argv[3]}" == "--why=Keep working lid closed" \
+  [[ "${argv[0]}" == "systemd-inhibit" && "${argv[1]}" == "--what=$WHAT" \
+     && "${argv[2]}" == "--who=$WHO" && "${argv[3]}" == "--why=$WHY" \
      && "${argv[4]}" == "sleep" && "${argv[5]}" == "infinity" ]] || return 1
   tr '\0' '\n' < "$proc/environ" | grep -Fxq "SLEEPWALKER_INHIBIT_TOKEN=$token"
+}
+
+find_pid_by_token() {
+  local token="$1" d pid
+  for d in "$PROC_ROOT"/[0-9]*; do
+    pid="${d##*/}"
+    owns_pid "$pid" "$token" 2>/dev/null && { printf '%s\n' "$pid"; return 0; }
+  done
+  return 1
+}
+
+launch_detached() {
+  local token="$1" pid=""
+  mkdir -p -- "$TOGGLES_DIR"
+  # Detached so a shell reload, crash or update never kills the inhibitor.
+  # The launcher exits at once; the grandchild reparents to init and survives.
+  if command -v setsid >/dev/null 2>&1; then
+    setsid env "SLEEPWALKER_INHIBIT_TOKEN=$token" systemd-inhibit \
+      --what="$WHAT" --who="$WHO" \
+      --why="$WHY" sleep infinity < /dev/null > /dev/null 2>&1 &
+  else
+    env "SLEEPWALKER_INHIBIT_TOKEN=$token" systemd-inhibit \
+      --what="$WHAT" --who="$WHO" \
+      --why="$WHY" sleep infinity < /dev/null > /dev/null 2>&1 &
+  fi
+  # The background PID above can be the setsid shim. Resolve the real owner
+  # by its private token instead of trusting $!.
+  for _ in $(seq 1 20); do
+    pid="$(find_pid_by_token "$token" || true)"
+    [[ -n $pid ]] && break
+    sleep 0.1
+  done
+  [[ -n $pid ]] || { echo "sleepwalker-inhibit: could not start inhibitor" >&2; return 1; }
+  umask 077
+  tmp=$(mktemp "$TOGGLES_DIR/.sleepwalker-inhibit.XXXXXX")
+  printf '%s\t%s\n' "$pid" "$token" > "$tmp"
+  mv -f -- "$tmp" "$PID_FILE"
 }
 
 reap() {
@@ -33,8 +81,8 @@ reap() {
 
 case "${1:-}" in
   --reap) reap ;;
-  *)
-    token="${1:-}"
+  --foreground)
+    token="${2:-}"
     valid_token "$token" || { echo "sleepwalker-inhibit: invalid token" >&2; exit 2; }
     mkdir -p -- "$TOGGLES_DIR"
     umask 077
@@ -42,7 +90,12 @@ case "${1:-}" in
     printf '%s\t%s\n' "$$" "$token" > "$tmp"
     mv -f -- "$tmp" "$PID_FILE"
     exec env "SLEEPWALKER_INHIBIT_TOKEN=$token" systemd-inhibit \
-      --what=handle-lid-switch --who="Omarchy Sleepwalker" \
-      --why="Keep working lid closed" sleep infinity
+      --what="$WHAT" --who="$WHO" \
+      --why="$WHY" sleep infinity
+    ;;
+  *)
+    token="${1:-}"
+    valid_token "$token" || { echo "sleepwalker-inhibit: invalid token" >&2; exit 2; }
+    launch_detached "$token"
     ;;
 esac
