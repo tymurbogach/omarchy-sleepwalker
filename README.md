@@ -43,6 +43,9 @@ continues.
 
 Sleepwalker adds a **Laptop** indicator to Omarchy's bar. When it is on,
 downloads, builds, servers, and SSH sessions continue with the lid closed.
+The block is detached from the shell, so reloads, updates and crashes never
+suspend a lid-closed laptop. While Working is on, sleep is blocked too —
+turn it off to suspend manually.
 
 | Working | Lock 🔒 | Result when you close the lid |
 |---|---|---|
@@ -126,8 +129,8 @@ omarchy plugin update io.github.tymurbogach.sleepwalker --yes
 omarchy-sleepwalker remove
 ```
 
-This clean path removes the plugin, command, lid-close shim, binding block,
-and state files. Lid close then returns to stock suspend.
+This clean path removes the plugin, command, inhibitor wrapper, lid-close
+shim, binding block, and state files. Lid close then returns to stock suspend.
 
 If setup ran first and you remove the plugin directly, use this recovery path:
 

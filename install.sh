@@ -101,7 +101,7 @@ commit_tmp() {
 
 echo "· migrating legacy state if present"
 
-# Legacy inhibitor units: the Service owns the inhibitor now.
+# Legacy inhibitor units: the inhibitor is detached now, no unit at all.
 for u in "${LEGACY_UNITS[@]}"; do
   if [[ -f $SYSTEMD_USER_DIR/$u ]]; then
     systemctl --user disable --now "$u" >/dev/null 2>&1 || systemctl --user stop "$u" >/dev/null 2>&1 || true
@@ -344,20 +344,15 @@ echo "$doc_out"
 # first load / widget swap after enable is only safe with a rebuild, so
 # restart at most once per run, and never on a no-op re-run: like stock
 # plugin ops, those leave the running shell untouched.
-case "$doc_out" in
-  *restarting*) ;;
-  *)
-    if $layout_changed; then
-      echo "· layout changed — restarting shell once to rebuild the strip"
-      omarchy-restart-shell >/dev/null 2>&1 || true
-    elif $code_changed; then
-      echo "· plugin code changed — restarting shell once to reload it"
-      omarchy-restart-shell >/dev/null 2>&1 || true
-    else
-      echo "· layout and code unchanged — shell untouched ( restart it yourself if the bar looks stale: omarchy-restart-shell )"
-    fi
-    ;;
-esac
+if $layout_changed; then
+  echo "· layout changed — restarting shell once to rebuild the strip"
+  omarchy-restart-shell >/dev/null 2>&1 || true
+elif $code_changed; then
+  echo "· plugin code changed — restarting shell once to reload it"
+  omarchy-restart-shell >/dev/null 2>&1 || true
+else
+  echo "· layout and code unchanged — shell untouched ( restart it yourself if the bar looks stale: omarchy-restart-shell )"
+fi
 
 # Stamp after the decision so a failed run retries the restart next time.
 if $MD5_OK && [[ -d $PLUGINS_DIR/$ID ]]; then

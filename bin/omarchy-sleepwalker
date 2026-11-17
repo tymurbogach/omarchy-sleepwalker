@@ -152,16 +152,6 @@ set_lock() {
   sync_sleep_lock
 }
 
-service_loaded() {
-  # NOTE: `omarchy shell <target> <method>` is the routed form; the bare
-  # `omarchy-shell shell …` variant answers "Function not found" for targets.
-  # Match "active":true exactly: the key alone also appears when inactive.
-  # No `grep -q` pipe: with `pipefail` it can SIGPIPE-fail on match (see above).
-  local out
-  out="$(omarchy shell sleepwalker status 2>/dev/null || true)"
-  [[ $out == *'"active":true'* ]]
-}
-
 cmd_status() {
   local json=false
   [[ ${1:-} == "--json" ]] && json=true
